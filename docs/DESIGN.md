@@ -1850,6 +1850,407 @@ values:
 
 ---
 
+## 15. Structured Law Layer
+
+Beyond encoding rules computationally, Cosilico aims to represent the law itself as structured data, enabling bidirectional translation between legal text and executable simulations.
+
+### 15.1 Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           LEGAL TEXT SOURCES                                 │
+│                                                                              │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐ │
+│  │    USC    │  │    CFR    │  │   State   │  │  Program  │  │    Tax    │ │
+│  │ (Statutes)│  │  (Regs)   │  │   Codes   │  │  Manuals  │  │   Forms   │ │
+│  └───────────┘  └───────────┘  └───────────┘  └───────────┘  └───────────┘ │
+│         │             │             │              │              │         │
+│         └─────────────┴─────────────┴──────────────┴──────────────┘         │
+│                                     ↓                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          LEGAL KNOWLEDGE GRAPH                               │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                        Statute Database                              │   │
+│  │  • Hierarchical structure (Title → Chapter → Section → Subsection)  │   │
+│  │  • Cross-references between sections                                 │   │
+│  │  • Amendment history with effective dates                            │   │
+│  │  • Definitions and term usage                                        │   │
+│  │  • Delegation chains (statute → regulation → guidance)               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                     ↓                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                      Semantic Annotations                            │   │
+│  │  • Computational intent (threshold, rate, eligibility test)          │   │
+│  │  • Entity references (taxpayer, dependent, household)                │   │
+│  │  • Temporal markers (taxable year, calendar year, fiscal year)       │   │
+│  │  • Conditions and exceptions                                          │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                     ↓                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         BIDIRECTIONAL LINKAGE                                │
+│                                                                              │
+│  ┌──────────────────────┐              ┌──────────────────────┐            │
+│  │                      │   encodes    │                      │            │
+│  │    Legal Text        │ ──────────→  │   Cosilico Rules     │            │
+│  │                      │              │                      │            │
+│  │  "The credit under   │              │  @variable           │            │
+│  │   this section       │              │  def eitc(...):      │            │
+│  │   shall be..."       │  ←──────────  │    ...               │            │
+│  │                      │   generates  │                      │            │
+│  └──────────────────────┘              └──────────────────────┘            │
+│                                                                              │
+│  Every rule knows its source sections.                                       │
+│  Every statute section knows which rules implement it.                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          AI ENCODING PIPELINE                                │
+│                                                                              │
+│  ┌───────────────┐    ┌───────────────┐    ┌───────────────┐               │
+│  │  Bill Text    │ →  │   AI Parser   │ →  │ Draft Rules   │               │
+│  │  (new/amended)│    │  (understand  │    │ (Cosilico DSL)│               │
+│  │               │    │   legal       │    │               │               │
+│  │               │    │   semantics)  │    │               │               │
+│  └───────────────┘    └───────────────┘    └───────────────┘               │
+│                              ↓                     ↓                        │
+│                       ┌───────────────┐    ┌───────────────┐               │
+│                       │ Human Review  │ ←  │  Validation   │               │
+│                       │ & Refinement  │    │  (type check, │               │
+│                       │               │    │   test cases) │               │
+│                       └───────────────┘    └───────────────┘               │
+│                              ↓                                              │
+│                       ┌───────────────┐                                     │
+│                       │  Production   │                                     │
+│                       │    Rules      │                                     │
+│                       └───────────────┘                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      LEGISLATIVE GENERATION                                  │
+│                                                                              │
+│  ┌───────────────┐    ┌───────────────┐    ┌───────────────┐               │
+│  │   Reform in   │ →  │   Generator   │ →  │  Bill Text    │               │
+│  │   Cosilico    │    │  (Cosilico →  │    │  (legal       │               │
+│  │               │    │   legal       │    │   language)   │               │
+│  │               │    │   language)   │    │               │               │
+│  └───────────────┘    └───────────────┘    └───────────────┘               │
+│                                                                              │
+│  User designs policy → generates draft legislation with proper amendments   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 15.2 Statute Data Model
+
+```python
+@dataclass
+class StatuteSection:
+    """A section of statutory law."""
+
+    # Identity
+    jurisdiction: Jurisdiction  # US, CA, NY, etc.
+    code: str                   # "USC", "IRC", "CA_WIC"
+    title: str                  # "26" (Internal Revenue Code)
+    section: str                # "32"
+    subsection: Optional[str]   # "(a)(1)(A)"
+
+    # Hierarchy
+    parent: Optional[StatuteSection]
+    children: List[StatuteSection]
+
+    # Content
+    heading: str                # "Earned income credit"
+    text: str                   # Full statutory text
+
+    # Temporality
+    enacted_date: date
+    effective_date: date
+    amended_by: List[Amendment]
+    superseded_by: Optional[StatuteSection]
+
+    # Cross-references
+    references: List[StatuteRef]      # Sections this cites
+    referenced_by: List[StatuteRef]   # Sections that cite this
+
+    # Delegation
+    implementing_regs: List[RegulationSection]
+
+    # Computational mapping
+    cosilico_rules: List[RuleRef]     # Rules that implement this
+
+
+@dataclass
+class Amendment:
+    """A change to statutory text."""
+
+    public_law: str             # "P.L. 117-169"
+    bill: str                   # "H.R. 5376"
+    name: str                   # "Inflation Reduction Act of 2022"
+    enacted_date: date
+    effective_date: date
+
+    # What changed
+    section_affected: StatuteSection
+    change_type: Literal["add", "amend", "repeal", "redesignate"]
+    old_text: Optional[str]
+    new_text: Optional[str]
+
+    # Mapping
+    cosilico_changes: List[RuleChange]  # Resulting rule updates
+
+
+@dataclass
+class RuleRef:
+    """Reference from statute to Cosilico rule."""
+
+    rule_id: str                    # "us.irs.credits.eitc"
+    coverage: Coverage              # FULL, PARTIAL, REFERENCED
+    notes: Optional[str]            # Explanation of mapping
+
+
+class Coverage(Enum):
+    FULL = "full"           # Rule fully implements this section
+    PARTIAL = "partial"     # Rule implements part of this section
+    REFERENCED = "ref"      # Rule references but doesn't implement
+```
+
+### 15.3 Bill Tracking Pipeline
+
+```python
+class BillTracker:
+    """Monitor legislative activity and trigger encoding."""
+
+    async def track_jurisdiction(self, jurisdiction: Jurisdiction):
+        """Track all bills in a jurisdiction."""
+
+        sources = {
+            Jurisdiction.US_FEDERAL: CongressGovAPI(),
+            Jurisdiction.US_CA: CALegInfoAPI(),
+            Jurisdiction.US_NY: NYSenateAPI(),
+            # ... all 50 states + DC + territories
+        }
+
+        async for bill in sources[jurisdiction].stream_bills():
+            # Filter for relevant subject areas
+            if not self._is_tax_benefit_related(bill):
+                continue
+
+            # Parse bill structure
+            parsed = await self.parse_bill(bill)
+
+            # Identify affected statutes
+            affected = self.identify_affected_sections(parsed)
+
+            # Generate draft Cosilico rules
+            draft = await self.ai_encode(parsed, affected)
+
+            # Queue for human review
+            await self.queue_for_review(bill, draft)
+
+
+    async def ai_encode(
+        self,
+        bill: ParsedBill,
+        affected: List[StatuteSection]
+    ) -> DraftRules:
+        """Use AI to generate draft Cosilico rules from bill text."""
+
+        # Get current rules for affected sections
+        current_rules = self.get_rules_for_sections(affected)
+
+        # Build context for AI
+        context = EncodingContext(
+            bill_text=bill.text,
+            bill_structure=bill.sections,
+            affected_statutes=[s.text for s in affected],
+            current_rules=current_rules,
+            parameter_schema=self.get_param_schema(),
+            entity_definitions=self.get_entity_defs(),
+        )
+
+        # AI generates draft rules
+        draft = await self.encoder_model.generate(
+            context,
+            output_format="cosilico_dsl",
+            include_tests=True,
+            include_citations=True,
+        )
+
+        # Validate draft compiles
+        validation = self.validate_draft(draft)
+
+        return DraftRules(
+            rules=draft.rules,
+            parameters=draft.parameters,
+            tests=draft.tests,
+            validation=validation,
+            confidence=draft.confidence,
+            uncertain_sections=draft.uncertain,
+        )
+```
+
+### 15.4 Legislative Text Generation
+
+```python
+class LegislativeGenerator:
+    """Generate bill text from Cosilico reforms."""
+
+    def generate_bill(
+        self,
+        reform: Reform,
+        target_jurisdiction: Jurisdiction,
+        style: LegislativeStyle = LegislativeStyle.AMENDMENT,
+    ) -> GeneratedBill:
+        """Convert a Cosilico reform to draft legislation."""
+
+        # Analyze what the reform changes
+        changes = self.analyze_reform(reform)
+
+        # Map changes to statute sections
+        section_changes = []
+        for change in changes:
+            # Find statute section this rule implements
+            section = self.find_source_section(change.rule)
+
+            if change.type == ChangeType.PARAMETER:
+                # Parameter change → amend specific text
+                amendment = self.generate_parameter_amendment(
+                    section, change.parameter, change.old_value, change.new_value
+                )
+            elif change.type == ChangeType.NEW_RULE:
+                # New rule → add new section
+                amendment = self.generate_new_section(
+                    section.parent, change.rule
+                )
+            elif change.type == ChangeType.MODIFY_FORMULA:
+                # Formula change → rewrite section
+                amendment = self.generate_section_rewrite(
+                    section, change.rule
+                )
+
+            section_changes.append(amendment)
+
+        # Assemble into bill format
+        bill = self.assemble_bill(
+            title=reform.name,
+            short_title=reform.short_name,
+            findings=reform.rationale,
+            amendments=section_changes,
+            effective_date=reform.effective_date,
+            style=style,
+        )
+
+        # Include fiscal note based on microsimulation
+        fiscal_note = self.generate_fiscal_note(reform)
+
+        return GeneratedBill(
+            text=bill,
+            fiscal_note=fiscal_note,
+            affected_sections=section_changes,
+            cosilico_reform=reform,
+        )
+
+
+    def generate_parameter_amendment(
+        self,
+        section: StatuteSection,
+        parameter: str,
+        old_value: Any,
+        new_value: Any,
+    ) -> Amendment:
+        """Generate amendment text for a parameter change."""
+
+        # Find where value appears in statute text
+        location = self.find_value_in_text(section.text, old_value)
+
+        # Generate amendment language
+        if location:
+            return Amendment(
+                section=section,
+                text=f'''Section {section.section}{section.subsection or ""} is amended by striking "{old_value}" and inserting "{new_value}".''',
+                change_type="amend",
+            )
+        else:
+            # Value is in regulations or implicit
+            return Amendment(
+                section=section,
+                text=f'''Section {section.section} is amended by adding at the end the following: "For purposes of this section, the {parameter} shall be {new_value}."''',
+                change_type="amend",
+            )
+```
+
+### 15.5 Comparison with OpenStates
+
+| Aspect | OpenStates | Cosilico Legal Layer |
+|--------|------------|---------------------|
+| **Scope** | Bills and votes | Bills + statutes + regulations + forms |
+| **Bill tracking** | Introduced, passed, vetoed | + computational impact |
+| **Statute text** | No | Full structured database |
+| **Cross-references** | No | Full citation graph |
+| **Amendments** | Text diff | Semantic understanding |
+| **Computational mapping** | No | Bidirectional rule linkage |
+| **AI encoding** | No | Bill → simulation |
+| **Bill generation** | No | Reform → legislation |
+
+OpenStates is valuable infrastructure for bill tracking. Cosilico builds on this foundation but adds:
+1. Deeper understanding of what bills *do* (not just that they exist)
+2. Connection to executable simulations
+3. Bidirectional translation (law ↔ code)
+
+### 15.6 Data Sources
+
+| Source | Content | Format | Update Frequency |
+|--------|---------|--------|------------------|
+| **USLM** | US Code | XML (USLM schema) | Continuous |
+| **eCFR** | Code of Federal Regulations | XML | Daily |
+| **Congress.gov** | Federal bills | XML/JSON API | Real-time |
+| **State legislatures** | State bills | Varies (50 different) | Real-time |
+| **Westlaw/LexisNexis** | Annotated statutes | Proprietary | N/A (cost) |
+| **Cornell LII** | Free legal resources | HTML | Weekly |
+| **IRS.gov** | Tax forms, instructions | PDF/XML | Annual + updates |
+| **SSA POMS** | Social Security manual | HTML | Continuous |
+| **State agency sites** | Program rules | HTML/PDF | Varies |
+
+### 15.7 Implementation Phases
+
+**Phase 1: Foundation (Months 1-6)**
+- Statute data model and storage
+- Federal tax code ingestion (Title 26)
+- Basic cross-reference parsing
+- Bidirectional linking infrastructure
+
+**Phase 2: AI Encoding (Months 6-12)**
+- Bill tracking integration
+- AI-assisted encoding pipeline
+- Human review interface
+- Test case generation
+
+**Phase 3: Multi-jurisdiction (Months 12-18)**
+- State code ingestion (start with CA, NY, TX)
+- Regulation layer (CFR, state regs)
+- Program manual integration
+
+**Phase 4: Generation (Months 18-24)**
+- Legislative text generation
+- Fiscal note automation
+- Amendment drafting assistance
+
+### 15.8 Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| **Legal text parsing errors** | Wrong rules | Human review required; confidence scores |
+| **AI hallucination** | Incorrect encoding | Validation against test cases; citation verification |
+| **Copyright issues** | Legal liability | Use government sources (public domain) |
+| **Keeping up with changes** | Stale rules | Real-time bill tracking; automated alerts |
+| **State variation** | 50 different formats | Incremental rollout; jurisdiction-specific parsers |
+
+---
+
 ## Appendix A: Comparison with OpenFisca
 
 | Aspect | OpenFisca | Cosilico |
