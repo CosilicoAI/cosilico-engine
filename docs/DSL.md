@@ -498,61 +498,499 @@ internal variable eitc_phase_in { ... }
 
 ## 6. Testing
 
-### 6.1 Inline Tests
+Tests live in **YAML files**, separate from rule definitions. This follows the OpenFisca/PolicyEngine pattern but with enhancements for Cosilico's needs.
 
-```cosilico
-test "EITC for single filer with one child" {
-  reference "IRS Publication 596, Example 3"
+### 6.1 Why YAML for Tests?
 
-  given {
-    person adult {
-      age: 30
-      employment_income: 20000
-    }
-    person child {
-      age: 5
-    }
-    tax_unit {
-      members: [adult, child]
-      filing_status: single
-    }
-    household {
-      members: [adult, child]
-      state: "TX"
-    }
-  }
+| Aspect | YAML Tests | Inline DSL Tests |
+|--------|------------|------------------|
+| **Separation of concerns** | ✅ Rules vs test cases | ❌ Mixed together |
+| **Non-programmer friendly** | ✅ Editable by policy experts | ⚠️ Requires DSL knowledge |
+| **AI generation** | ✅ Easy to generate/parse | ⚠️ More complex |
+| **IRS examples** | ✅ Direct transcription | ❌ Requires translation |
+| **Bulk updates** | ✅ Script across files | ❌ Harder to batch |
+| **Version control** | ✅ Clear diffs | ✅ Clear diffs |
 
-  expect {
-    earned_income: 20000
-    eitc: 3584
-    eitc_phase_in: 3584
-    eitc_phase_out: 0
-  }
-}
+### 6.2 Test File Structure
+
+```
+tests/
+├── us/
+│   ├── federal/
+│   │   ├── irs/
+│   │   │   ├── credits/
+│   │   │   │   ├── eitc.yaml           # EITC test cases
+│   │   │   │   ├── ctc.yaml            # CTC test cases
+│   │   │   │   └── eitc_properties.yaml # Property-based tests
+│   │   │   └── income/
+│   │   │       └── brackets.yaml
+│   │   └── ssa/
+│   │       └── social_security.yaml
+│   └── states/
+│       ├── ca/
+│       │   └── ca_eitc.yaml
+│       └── ny/
+│           └── ny_eitc.yaml
+└── integration/
+    └── full_household.yaml
 ```
 
-### 6.2 Property Tests
+### 6.3 Basic Test Format
 
-```cosilico
-property "EITC is non-negative" {
-  for_all tax_unit {
-    assert variable(eitc) >= 0
-  }
-}
+```yaml
+# tests/us/federal/irs/credits/eitc.yaml
 
-property "EITC phases out to zero" {
-  for_all tax_unit where variable(earned_income) > 60000 {
-    assert variable(eitc) == 0
-  }
-}
+metadata:
+  module: us.federal.irs.credits.eitc
+  description: EITC test cases from IRS publications
+  maintainer: cosilico-team
 
-property "Tax is monotonic in income" {
-  for_all tax_unit, income1 < income2 {
-    given { employment_income: income1 } as scenario1
-    given { employment_income: income2 } as scenario2
-    assert scenario1.income_tax <= scenario2.income_tax
-  }
-}
+tests:
+  - name: Single filer, no children, $8000 income
+    reference: IRS Publication 596, Worksheet A
+    period: 2024
+
+    input:
+      people:
+        worker:
+          age: 28
+          employment_income: 8000
+
+      tax_units:
+        tax_unit:
+          members: [worker]
+          filing_status: single
+
+      households:
+        household:
+          members: [worker]
+          state_name: TX
+
+    output:
+      earned_income: 8000
+      eitc_phase_in: 612        # 8000 * 0.0765
+      eitc_max_amount: 632
+      eitc_phase_out: 0
+      eitc: 612
+
+  - name: Married filing jointly, 2 children, $35000 income
+    reference: IRS EITC Assistant example
+    period: 2024
+
+    input:
+      people:
+        parent1:
+          age: 35
+          employment_income: 25000
+        parent2:
+          age: 33
+          employment_income: 10000
+        child1:
+          age: 8
+        child2:
+          age: 5
+
+      tax_units:
+        tax_unit:
+          members: [parent1, parent2, child1, child2]
+          filing_status: married_filing_jointly
+
+      households:
+        household:
+          members: [parent1, parent2, child1, child2]
+          state_name: CA
+
+    output:
+      earned_income: 35000
+      num_qualifying_children_for_eitc: 2
+      eitc: 5764
+```
+
+### 6.4 Shorthand Syntax
+
+For simple cases, use compact syntax:
+
+```yaml
+tests:
+  # Minimal single-person test
+  - name: Basic income tax
+    period: 2024
+    input:
+      person:                    # Shorthand for single person
+        age: 30
+        employment_income: 50000
+      state: CA                  # Shorthand for household.state_name
+      filing_status: single      # Shorthand for tax_unit.filing_status
+
+    output:
+      income_tax: 4235
+
+  # Even shorter for quick checks
+  - name: Zero income, zero tax
+    period: 2024
+    input: { age: 30, employment_income: 0, state: TX }
+    output: { income_tax: 0, eitc: 0 }
+```
+
+The test runner expands shorthand to full entity structure.
+
+### 6.5 Multi-Period Tests
+
+```yaml
+tests:
+  - name: Income averaging over 3 years
+    reference: 26 USC § 1301 (farm income averaging)
+
+    input:
+      person:
+        age: 45
+        # Different income each year
+        employment_income:
+          2022: 30000
+          2023: 35000
+          2024: 150000  # Big harvest year
+        is_farmer: true
+      state: IA
+      filing_status: single
+
+    # Can specify expected outputs for multiple periods
+    output:
+      2024:
+        farm_income_averaging_benefit: 12500
+        income_tax: 28000  # Lower due to averaging
+```
+
+### 6.6 Reform Tests
+
+```yaml
+tests:
+  - name: CTC expansion impact
+    description: Test household under proposed CTC expansion
+    period: 2024
+
+    reform:
+      gov.irs.credits.ctc.amount.base:
+        2024-01-01: 3600  # Expanded from $2000
+      gov.irs.credits.ctc.phase_out.start.single:
+        2024-01-01: 200000  # Raised threshold
+
+    input:
+      people:
+        parent:
+          age: 32
+          employment_income: 45000
+        child:
+          age: 4
+      tax_units:
+        tax_unit:
+          members: [parent, child]
+          filing_status: single
+
+    output:
+      ctc: 3600  # Full expanded credit
+
+    # Compare to baseline
+    baseline_output:
+      ctc: 2000  # Current law
+```
+
+### 6.7 Tolerance and Error Margins
+
+```yaml
+tests:
+  - name: Complex calculation with rounding
+    period: 2024
+
+    # Absolute tolerance (default: 0.01 for Money, 0.0001 for Rate)
+    absolute_error_margin: 1.00  # Allow $1 difference
+
+    # OR relative tolerance
+    relative_error_margin: 0.001  # 0.1% difference allowed
+
+    input:
+      person: { age: 55, employment_income: 123456.78 }
+      state: NY
+
+    output:
+      income_tax: 24691  # Approximately
+
+  - name: Exact match required
+    period: 2024
+    exact: true  # No tolerance
+
+    input:
+      person: { age: 30, employment_income: 0 }
+
+    output:
+      income_tax: 0
+      eitc: 0
+```
+
+### 6.8 Test Categories and Tags
+
+```yaml
+metadata:
+  module: us.federal.irs.credits.eitc
+  tags: [credits, refundable, eitc]
+
+tests:
+  - name: Edge case - exactly at phase-out threshold
+    tags: [edge-case, phase-out]
+    period: 2024
+    # ...
+
+  - name: IRS example from Pub 596 page 23
+    tags: [irs-official, regression]
+    reference: IRS Publication 596 (2024), Example 3
+    # ...
+
+  - name: Boundary - maximum credit
+    tags: [boundary, max-value]
+    # ...
+```
+
+Run specific categories:
+```bash
+cosilico test --tag edge-case
+cosilico test --tag irs-official
+cosilico test --exclude-tag slow
+```
+
+### 6.9 Property-Based Tests
+
+For invariants that should hold across all inputs:
+
+```yaml
+# tests/us/federal/irs/credits/eitc_properties.yaml
+
+metadata:
+  module: us.federal.irs.credits.eitc
+  type: properties
+
+properties:
+  - name: EITC is non-negative
+    description: Credit should never be negative
+    for_all:
+      variables: [eitc]
+      constraint: eitc >= 0
+
+  - name: EITC bounded by maximum
+    for_all:
+      variables: [eitc, eitc_max_amount]
+      constraint: eitc <= eitc_max_amount
+
+  - name: EITC phases out at high income
+    for_all:
+      where:
+        earned_income: { min: 60000 }
+        filing_status: single
+        num_qualifying_children_for_eitc: 0
+      constraint: eitc == 0
+
+  - name: Tax is monotonic in income
+    description: More income should never reduce tax liability
+    monotonic:
+      variable: income_tax
+      with_respect_to: employment_income
+      direction: increasing
+
+  - name: Benefits cliff detection
+    description: Net income should generally increase with gross income
+    for_all:
+      variables: [household_net_income, employment_income]
+      # Flag violations rather than fail (cliffs exist in current law)
+      warn_if: |
+        delta(household_net_income) / delta(employment_income) < -0.5
+```
+
+Run property tests:
+```bash
+cosilico test --properties
+cosilico test --properties --samples 10000  # More thorough
+```
+
+### 6.10 Parameterized Tests
+
+Generate tests from data:
+
+```yaml
+tests:
+  - name: EITC by income level - ${income}
+    template: true
+    period: 2024
+
+    parameters:
+      - income: 0
+        expected_eitc: 0
+      - income: 5000
+        expected_eitc: 382
+      - income: 10000
+        expected_eitc: 765
+      - income: 15000
+        expected_eitc: 1147
+      - income: 20000
+        expected_eitc: 632  # Capped at max
+      - income: 25000
+        expected_eitc: 250  # Phase-out
+      - income: 30000
+        expected_eitc: 0    # Fully phased out
+
+    input:
+      person:
+        age: 30
+        employment_income: ${income}
+      state: TX
+      filing_status: single
+
+    output:
+      eitc: ${expected_eitc}
+```
+
+### 6.11 Integration Tests
+
+Full household scenarios testing multiple programs:
+
+```yaml
+# tests/integration/full_household.yaml
+
+metadata:
+  type: integration
+  description: Full household calculations across all programs
+
+tests:
+  - name: Low-income family - all benefits
+    description: Single parent with 2 kids, $25k income, receives EITC, CTC, SNAP
+    period: 2024
+
+    input:
+      people:
+        parent:
+          age: 28
+          employment_income: 25000
+        child1:
+          age: 6
+        child2:
+          age: 3
+
+      tax_units:
+        tax_unit:
+          members: [parent, child1, child2]
+          filing_status: head_of_household
+
+      spm_units:
+        spm_unit:
+          members: [parent, child1, child2]
+          housing_cost: 1200  # Monthly rent
+
+      households:
+        household:
+          members: [parent, child1, child2]
+          state_name: TX
+
+    output:
+      # Federal taxes
+      income_tax: -3200      # Negative = refundable credits exceed liability
+      payroll_tax: 1912
+
+      # Federal credits
+      eitc: 6604
+      ctc: 4000
+
+      # Benefits
+      snap: 4800             # Annual SNAP
+
+      # Summary
+      household_benefits: 15404
+      household_tax: -1288   # Net refund
+      household_net_income: 41692
+```
+
+### 6.12 Running Tests
+
+```bash
+# Run all tests
+cosilico test
+
+# Run specific file
+cosilico test tests/us/federal/irs/credits/eitc.yaml
+
+# Run specific test by name
+cosilico test --name "Single filer, no children"
+
+# Run with verbose output
+cosilico test -v
+
+# Run with coverage
+cosilico test --coverage
+
+# Run only fast tests
+cosilico test --exclude-tag slow
+
+# Generate test report
+cosilico test --report html --output test-report.html
+
+# Update expected values (dangerous - review carefully!)
+cosilico test --update-expected
+```
+
+### 6.13 Test Output
+
+```
+$ cosilico test tests/us/federal/irs/credits/eitc.yaml
+
+Running 24 tests from eitc.yaml...
+
+✓ Single filer, no children, $8000 income (0.003s)
+✓ Married filing jointly, 2 children, $35000 income (0.004s)
+✓ Head of household, 1 child, $20000 income (0.003s)
+✗ Edge case - exactly at phase-out threshold (0.003s)
+
+  FAILED: eitc
+    Expected: 1234
+    Actual:   1235
+    Difference: 1 (0.08%)
+
+    Reference: IRS Publication 596, Example 7
+
+    Input:
+      employment_income: 21430
+      filing_status: single
+      num_qualifying_children_for_eitc: 1
+
+...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Results: 23 passed, 1 failed, 0 skipped
+Time: 0.089s
+Coverage: eitc (100%), eitc_phase_in (100%), eitc_phase_out (87%)
+```
+
+### 6.14 Continuous Integration
+
+```yaml
+# .github/workflows/test.yml
+
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Cosilico
+        run: pip install cosilico
+
+      - name: Run tests
+        run: cosilico test --coverage --report junit --output results.xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+
+      - name: Property tests (nightly only)
+        if: github.event_name == 'schedule'
+        run: cosilico test --properties --samples 100000
 ```
 
 ---
@@ -848,58 +1286,64 @@ enum eitc_child_category {
   two
   three_or_more
 }
+```
 
-# Tests
-test "Single filer, no children, $8000 income" {
-  reference "IRS Publication 596, Worksheet A"
+**Associated test file** (`tests/us/federal/irs/credits/eitc.yaml`):
 
-  given {
-    person worker { age: 28, employment_income: 8000 }
-    tax_unit { members: [worker], filing_status: single }
-  }
+```yaml
+metadata:
+  module: us.federal.irs.credits.eitc
+  description: EITC test cases from IRS publications
+  tags: [credits, refundable, eitc]
 
-  expect {
-    earned_income: 8000
-    eitc_phase_in: 612          # 8000 * 0.0765
-    eitc_max_amount: 632
-    eitc_phase_out: 0
-    eitc: 612
-  }
-}
+tests:
+  - name: Single filer, no children, $8000 income
+    reference: IRS Publication 596, Worksheet A
+    period: 2024
+    input:
+      person: { age: 28, employment_income: 8000 }
+      state: TX
+      filing_status: single
+    output:
+      earned_income: 8000
+      eitc_phase_in: 612
+      eitc_max_amount: 632
+      eitc_phase_out: 0
+      eitc: 612
 
-test "Married filing jointly, 2 children, $35000 income" {
-  reference "IRS EITC Assistant example"
+  - name: Married filing jointly, 2 children, $35000 income
+    reference: IRS EITC Assistant example
+    period: 2024
+    input:
+      people:
+        parent1: { age: 35, employment_income: 25000 }
+        parent2: { age: 33, employment_income: 10000 }
+        child1: { age: 8 }
+        child2: { age: 5 }
+      tax_units:
+        tax_unit:
+          members: [parent1, parent2, child1, child2]
+          filing_status: married_filing_jointly
+      households:
+        household:
+          members: [parent1, parent2, child1, child2]
+          state_name: CA
+    output:
+      earned_income: 35000
+      num_qualifying_children_for_eitc: 2
+      eitc_max_amount: 6960
+      eitc: 5764
 
-  given {
-    person parent1 { age: 35, employment_income: 25000 }
-    person parent2 { age: 33, employment_income: 10000 }
-    person child1 { age: 8 }
-    person child2 { age: 5 }
-    tax_unit {
-      members: [parent1, parent2, child1, child2]
-      filing_status: married_filing_jointly
-    }
-  }
+properties:
+  - name: EITC is bounded by max amount
+    for_all:
+      variables: [eitc, eitc_max_amount]
+      constraint: eitc <= eitc_max_amount
 
-  expect {
-    earned_income: 35000
-    num_qualifying_children_for_eitc: 2
-    eitc_max_amount: 6960
-    eitc: 5764
-  }
-}
-
-property "EITC is bounded by max amount" {
-  for_all tax_unit {
-    assert variable(eitc) <= variable(eitc_max_amount)
-  }
-}
-
-property "EITC is non-negative" {
-  for_all tax_unit {
-    assert variable(eitc) >= 0
-  }
-}
+  - name: EITC is non-negative
+    for_all:
+      variables: [eitc]
+      constraint: eitc >= 0
 ```
 
 ---
