@@ -2298,6 +2298,296 @@ Many policy details exist only in guidance, not in statute or regulation:
 
 ---
 
+## 17. Microdata Calibration Layer
+
+### Problem Statement
+
+Microsimulation requires representative population data. Survey microdata (CPS, ACS, SCF) must be **calibrated** to match known administrative totals. The challenge: calibration targets include both:
+
+1. **Observed variables** - Wages, demographics (straightforward)
+2. **Calculated variables** - Income tax, SNAP benefits (requires rules engine)
+3. **Intermediate calculated variables** - E.g., UK voluntary student loan repayments require first calculating required repayment
+
+This creates a **bidirectional dependency** between the rules engine and microdata layer:
+
+```
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│   Survey    │─────▶│    Rules    │─────▶│ Calculated  │
+│  Microdata  │      │   Engine    │      │  Variables  │
+└─────────────┘      └─────────────┘      └─────────────┘
+       │                                         │
+       │         ┌─────────────┐                 │
+       └────────▶│ Calibration │◀────────────────┘
+                 │   Engine    │
+                 └─────────────┘
+                        │
+                        ▼
+                 ┌─────────────┐
+                 │  Calibrated │
+                 │  Microdata  │
+                 └─────────────┘
+```
+
+### Calibration Target Types
+
+```python
+@dataclass(frozen=True)
+class CalibrationTarget:
+    """A target for microdata calibration."""
+    name: str
+    target_value: float              # Administrative total (e.g., $3.2T wages)
+    source: str                      # Citation (e.g., "IRS SOI Table 1.1")
+    variable_type: CalibrationVarType
+
+class CalibrationVarType(Enum):
+    OBSERVED = "observed"            # Direct survey variable (wages, age)
+    CALCULATED = "calculated"        # Rules engine output (income_tax, snap)
+    INTERMEDIATE = "intermediate"    # Calculated, then used for another calibration
+
+
+@dataclass(frozen=True)
+class IntermediateCalibrationTarget(CalibrationTarget):
+    """Target that requires prior calculation for calibration logic."""
+    prerequisite_variable: str       # Variable to calculate first
+    calibration_formula: str         # How to derive calibration target from prerequisite
+    # Example: voluntary_student_loan_repayment calibrates based on
+    # (actual_repayment - required_student_loan_repayment) for those who overpay
+```
+
+### UK Voluntary Student Loan Repayment Example
+
+This is a concrete example of the intermediate calibration pattern:
+
+```python
+# Survey has: total_student_loan_repayment (what people actually paid)
+# We need to calibrate: voluntary_student_loan_repayment (overpayments)
+# But voluntary = actual - required, where required is calculated
+
+class VoluntaryStudentLoanCalibration:
+    """
+    Steps:
+    1. Calculate required_student_loan_repayment for each person (rules engine)
+    2. Derive voluntary = actual - required (where actual > required)
+    3. Calibrate voluntary repayments to administrative total
+    """
+
+    prerequisite_variable = "required_student_loan_repayment"
+
+    def derive_target_variable(self, actual: Array, required: Array) -> Array:
+        """Voluntary repayment is the excess over required."""
+        return np.maximum(0, actual - required)
+
+    target = CalibrationTarget(
+        name="voluntary_student_loan_repayment",
+        target_value=1_200_000_000,  # £1.2B administrative total
+        source="Student Loans Company Annual Report 2024",
+        variable_type=CalibrationVarType.INTERMEDIATE,
+    )
+```
+
+### Calibration Pipeline Architecture
+
+The calibration pipeline must handle these dependencies correctly:
+
+```
+Phase 1: Pre-Calibration Calculation
+├── Load raw survey microdata
+├── Run rules engine to calculate prerequisite variables
+│   ├── required_student_loan_repayment
+│   ├── Any other intermediate variables
+└── Derive calibration target variables
+
+Phase 2: Calibration
+├── Collect all calibration targets
+│   ├── Observed: wages, employment count, demographics
+│   ├── Calculated: income_tax, snap, eitc
+│   └── Intermediate: voluntary_student_loan_repayment
+├── Run calibration algorithm (entropy balancing, raking)
+└── Output: calibrated weights
+
+Phase 3: Post-Calibration Validation
+├── Run full rules engine on calibrated data
+├── Verify calculated totals match administrative targets
+└── Generate calibration quality report
+```
+
+### Calibration Engine Interface
+
+```python
+class MicrodataCalibrator:
+    """Calibrates microdata weights to match administrative totals."""
+
+    def __init__(
+        self,
+        rules_engine: RulesEngine,
+        targets: List[CalibrationTarget],
+    ):
+        self.rules_engine = rules_engine
+        self.targets = targets
+        self._classify_targets()
+
+    def _classify_targets(self):
+        """Separate targets by type for processing order."""
+        self.observed_targets = [t for t in self.targets
+                                  if t.variable_type == CalibrationVarType.OBSERVED]
+        self.calculated_targets = [t for t in self.targets
+                                    if t.variable_type == CalibrationVarType.CALCULATED]
+        self.intermediate_targets = [t for t in self.targets
+                                      if t.variable_type == CalibrationVarType.INTERMEDIATE]
+
+    def calibrate(self, microdata: MicrodataSet) -> CalibratedMicrodataSet:
+        """
+        Main calibration pipeline.
+
+        Returns calibrated microdata with adjusted weights.
+        """
+        # Phase 1: Calculate intermediate prerequisites
+        for target in self.intermediate_targets:
+            prereq = target.prerequisite_variable
+            microdata = self._calculate_variable(microdata, prereq)
+            microdata = self._derive_intermediate(microdata, target)
+
+        # Phase 2: Calculate all calibration target variables
+        for target in self.calculated_targets:
+            microdata = self._calculate_variable(microdata, target.name)
+
+        # Phase 3: Run calibration algorithm
+        calibrated_weights = self._solve_calibration(microdata)
+
+        # Phase 4: Validation
+        self._validate_calibration(microdata, calibrated_weights)
+
+        return CalibratedMicrodataSet(microdata, calibrated_weights)
+
+    def _calculate_variable(
+        self,
+        microdata: MicrodataSet,
+        variable: str
+    ) -> MicrodataSet:
+        """Use rules engine to calculate a variable for all records."""
+        results = self.rules_engine.calculate_batch(
+            microdata.to_situations(),
+            variables=[variable],
+        )
+        microdata.add_column(variable, results[variable])
+        return microdata
+```
+
+### Calibration Algorithm Options
+
+```python
+class CalibrationMethod(Enum):
+    RAKING = "raking"                    # Iterative proportional fitting
+    ENTROPY_BALANCING = "entropy"        # Minimum entropy distance
+    GENERALIZED_RAKING = "greg"          # Generalized regression estimator
+    QUANTILE_CALIBRATION = "quantile"    # Match distribution, not just total
+
+@dataclass
+class CalibrationConfig:
+    """Configuration for calibration algorithm."""
+    method: CalibrationMethod = CalibrationMethod.ENTROPY_BALANCING
+    max_weight_ratio: float = 10.0       # Max ratio of calibrated to original weight
+    convergence_tolerance: float = 1e-6
+    max_iterations: int = 1000
+
+    # For quantile calibration
+    quantile_targets: Optional[Dict[str, List[float]]] = None  # Percentile targets
+```
+
+### Integration with Rules Engine
+
+The key architectural requirement is that the rules engine must support **batch calculation** efficiently for calibration:
+
+```python
+class RulesEngine:
+    def calculate_batch(
+        self,
+        situations: List[Situation],
+        variables: List[str],
+        period: Period,
+    ) -> Dict[str, Array]:
+        """
+        Calculate variables for many households efficiently.
+
+        This is the primary interface for calibration - must be vectorized.
+        """
+        # Use compiled vectorized code for efficiency
+        compiled = self.compile(variables, target="numpy")
+        return compiled.execute_batch(situations, period)
+```
+
+### Calibration Targets Registry
+
+```yaml
+# calibration/targets/us_2024.yaml
+targets:
+  # Observed variables
+  - name: total_wages
+    value: 10_500_000_000_000  # $10.5T
+    source: "IRS SOI Table 1.1, Tax Year 2024"
+    type: observed
+
+  - name: total_employment
+    value: 160_000_000
+    source: "BLS Current Employment Statistics, Dec 2024"
+    type: observed
+
+  # Calculated variables (rules engine required)
+  - name: total_income_tax
+    value: 2_400_000_000_000  # $2.4T
+    source: "IRS Data Book 2024, Table 1"
+    type: calculated
+
+  - name: total_snap_benefits
+    value: 112_000_000_000  # $112B
+    source: "USDA FNS Program Data, FY2024"
+    type: calculated
+
+  - name: total_eitc
+    value: 64_000_000_000  # $64B
+    source: "IRS SOI EITC Statistics 2024"
+    type: calculated
+
+# calibration/targets/uk_2024.yaml
+targets:
+  - name: total_income_tax
+    value: 268_000_000_000  # £268B
+    source: "HMRC Tax Receipts 2024-25"
+    type: calculated
+
+  - name: voluntary_student_loan_repayment
+    value: 1_200_000_000  # £1.2B
+    source: "Student Loans Company Annual Report 2024"
+    type: intermediate
+    prerequisite: required_student_loan_repayment
+    derivation: "max(0, actual_repayment - required_repayment)"
+```
+
+### Performance Considerations
+
+Calibration requires running the rules engine on the full microdata (potentially 100K+ records). Key optimizations:
+
+1. **Vectorized calculation** - Use NumPy/compiled code, not per-household loops
+2. **Selective calculation** - Only calculate variables needed for calibration targets
+3. **Caching** - Cache calculated variables across calibration iterations
+4. **Incremental updates** - For iterative calibration, only recalculate weight-dependent variables
+
+```python
+@dataclass
+class CalibrationPerformance:
+    """Target performance metrics for calibration."""
+
+    # For 200K household microdata:
+    phase1_calculation_time: float = 60.0    # 60s for prerequisite calculation
+    phase2_calibration_time: float = 30.0    # 30s for weight optimization
+    phase3_validation_time: float = 60.0     # 60s for full validation
+
+    # Memory
+    peak_memory_gb: float = 8.0              # Should fit in standard machine
+```
+
+---
+
 ## Appendix A: Comparison with OpenFisca
 
 | Aspect | OpenFisca | Cosilico |
