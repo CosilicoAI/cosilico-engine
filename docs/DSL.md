@@ -25,7 +25,7 @@ PRINCIPLE: Any .cosilico file can be executed without risk.
 Unlike Python, where `@variable` decorated functions can import os, make network calls, or modify global state, Cosilico DSL is:
 - **Pure** - No side effects, no I/O
 - **Terminating** - No unbounded recursion or loops
-- **Bounded** - Memory and compute limits enforceable
+- **Bounded** - Runtime enforces memory and compute limits
 - **Sandboxed** - No access to filesystem, network, or system calls
 
 This enables:
@@ -50,10 +50,10 @@ The DSL compiles to an Intermediate Representation (IR) that is then code-genera
                                                               └── Spark (PySpark)
 ```
 
-Benefits:
-- Same rules run everywhere
-- Target-specific optimizations (vectorization for Python, loops for JS)
-- Catch errors at compile time, not runtime
+This design:
+- Allows the same rules to run on all targets without modification
+- Enables target-specific optimizations (vectorization for Python, loops for JS)
+- Moves error detection from runtime to compile time
 
 ### 1.3 Citations as syntax
 
@@ -88,9 +88,9 @@ PRINCIPLE: Optimize for AI generation and review.
 ```
 
 The syntax is designed for:
-- **Unambiguous parsing** - No context-dependent grammar
+- **Context-free grammar** - Enables single-pass parsing
 - **Structural consistency** - Same patterns everywhere
-- **Explicit over implicit** - No magic, no defaults that hide behavior
+- **Explicit over implicit** - No hidden defaults or implicit dependencies
 - **Diff-friendly** - Changes are localized, reviewable
 
 ```cosilico
@@ -108,7 +108,7 @@ variable income_tax {
   }
 }
 
-# Bad (what we're avoiding): implicit, magical
+# Compare to Python decorator approach: implicit dependencies
 @variable
 def income_tax(tax_unit, period):
     return tax_unit("agi", period).apply(brackets)  # Where does brackets come from?
@@ -502,14 +502,14 @@ Tests live in **YAML files**, separate from rule definitions. This follows the O
 
 ### 6.1 Why YAML for tests?
 
-| Aspect | YAML Tests | Inline DSL Tests |
+| Aspect | YAML tests | Inline DSL tests |
 |--------|------------|------------------|
-| **Separation of concerns** | ✅ Rules vs test cases | ❌ Mixed together |
-| **Non-programmer friendly** | ✅ Editable by policy experts | ⚠️ Requires DSL knowledge |
-| **AI generation** | ✅ Easy to generate/parse | ⚠️ More complex |
-| **IRS examples** | ✅ Direct transcription | ❌ Requires translation |
-| **Bulk updates** | ✅ Script across files | ❌ Harder to batch |
-| **Version control** | ✅ Clear diffs | ✅ Clear diffs |
+| **Separation** | Rules and test cases in separate files | Mixed in same file |
+| **Editing** | Standard YAML syntax | Requires DSL knowledge |
+| **AI generation** | Structured format, easy to parse | Requires DSL grammar |
+| **IRS examples** | Can transcribe directly from worksheets | Requires translation to DSL |
+| **Bulk updates** | Scriptable across files | Per-file changes |
+| **Version control** | Clear diffs | Clear diffs |
 
 ### 6.2 Test file structure
 
@@ -2732,17 +2732,20 @@ expression =
 
 ## Appendix B: Comparison with alternatives
 
-| Feature | Cosilico DSL | Python Decorators | Catala | DMN/FEEL |
-|---------|--------------|-------------------|--------|----------|
-| Safety | ✅ Sandboxed | ❌ Full Python | ✅ Safe | ✅ Safe |
-| Multi-target | ✅ 5 targets | ❌ Python only | ⚠️ 2 targets | ⚠️ Java mainly |
-| Vectorization | ✅ Native | ⚠️ Manual NumPy | ❌ Scalar | ❌ Scalar |
-| Citations | ✅ Syntax | ⚠️ Comments | ✅ Literate | ❌ None |
-| IDE Support | ✅ LSP | ✅ Python tools | ⚠️ Limited | ✅ Tooling |
-| Learning Curve | Medium | Low | High | Medium |
-| Formal Verification | ✅ Planned | ❌ No | ✅ Yes | ❌ No |
-| Time-varying Params | ✅ Native | ⚠️ Manual | ❌ No | ❌ No |
-| Entity Hierarchies | ✅ Native | ⚠️ Manual | ❌ No | ❌ No |
+Design goals comparison (not all features implemented yet):
+
+| Feature | Cosilico DSL (goal) | Python decorators | Catala | DMN/FEEL |
+|---------|---------------------|-------------------|--------|----------|
+| Sandboxing | Yes (by design) | No (full Python) | Yes | Yes |
+| Compilation targets | 5 planned | Python only | 2 (OCaml, Python) | Primarily Java |
+| Vectorization | Built-in | Manual NumPy | Scalar only | Scalar only |
+| Legal citations | Part of grammar | Comments only | Literate style | Not supported |
+| IDE support | LSP planned | Python tooling | Limited | Commercial tools |
+| Formal verification | Planned | Not supported | Supported | Not supported |
+| Time-varying params | Built-in | Manual implementation | Not supported | Not supported |
+| Entity hierarchies | Built-in | Manual implementation | Not supported | Not supported |
+
+Sources: [Catala](https://catala-lang.org/), [DMN spec](https://www.omg.org/spec/DMN/), OpenFisca/PolicyEngine codebases.
 
 ---
 

@@ -20,30 +20,32 @@ This document outlines the architecture, key abstractions, and implementation st
 
 Policy rules engines face several challenges:
 
-| Challenge | Impact | Current Solutions |
+| Challenge | Impact | Current solutions |
 |-----------|--------|-------------------|
-| **Scale** | Can't process census-scale data efficiently | Batch overnight jobs |
-| **Latency** | API response times > 1s | Heavy caching |
+| **Scale** | Census-scale runs take >12 hours | Batch overnight jobs |
+| **Latency** | API response times >1s | Heavy caching |
 | **Deployment** | Requires Python runtime everywhere | Containerization |
-| **Memory** | GB-scale for microsimulation | Expensive cloud instances |
+| **Memory** | 8-64GB RAM for microsimulation | Cloud instances ($200-800/mo) |
 | **Correctness** | Runtime errors in production | Extensive testing |
 | **Licensing** | AGPL prevents enterprise use | Avoid or rewrite |
 
 ### Target use cases
 
 1. **Microsimulation**: 100M+ households, research analysis
-2. **Real-time API**: < 100ms, 1000+ req/s, production services
+2. **Real-time API**: Production services
 3. **Browser calculators**: No backend, offline-capable
-4. **Benefit administration**: Legally accurate, auditable
+4. **Benefit administration**: Auditable calculations
 5. **Financial services**: Tax planning, portfolio optimization
 
-### Success criteria
+### Design targets
 
-- Process US Census data (130M households) in < 1 hour on commodity hardware
-- API p99 latency < 100ms for household calculations
-- Browser bundle < 500KB for typical calculator
-- Zero runtime type errors (caught at compile time)
-- Full audit trail for benefit determinations
+We set the following targets. These are goals, not demonstrated results:
+
+- **Scale**: Process 130M households in <1 hour on 32-core commodity hardware
+- **Latency**: API p99 <100ms for single-household calculations
+- **Bundle size**: <500KB browser bundle for typical calculator
+- **Type safety**: Compile-time type checking (no runtime type errors by construction)
+- **Auditability**: Every calculation traces to parameters, variables, and legal citations used
 
 ---
 
@@ -711,7 +713,7 @@ class SingleHouseholdExecutor:
         return {k: v[0] for k, v in results.items()}
 ```
 
-**Performance Target**: < 1ms per calculation
+**Target**: <1ms per calculation (based on similar vectorized operations in NumPy)
 
 ### 6.2 Batch (microsimulation)
 
@@ -736,7 +738,7 @@ class BatchExecutor:
             yield data.iloc[i:i + self.chunk_size]
 ```
 
-**Performance Target**: 1M households/second on 8-core machine
+**Target**: 1M households/second on 8-core machine (extrapolating from PolicyEngine's 100K/s on similar hardware)
 
 ### 6.3 Distributed (census scale)
 
@@ -752,7 +754,7 @@ class SparkExecutor:
         )
 ```
 
-**Performance Target**: 100M households in < 1 hour on 100-node cluster
+**Target**: 100M households in <1 hour on 100-node cluster (linear scaling assumption from batch executor)
 
 ---
 
@@ -2611,7 +2613,7 @@ class CalibrationPerformance:
     phase3_validation_time: float = 60.0     # 60s for full validation
 
     # Memory
-    peak_memory_gb: float = 8.0              # Should fit in standard machine
+    peak_memory_gb: float = 8.0              # Fits on 16GB RAM instances
 ```
 
 ---
