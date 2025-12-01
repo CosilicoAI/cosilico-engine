@@ -498,7 +498,13 @@ internal variable eitc_phase_in { ... }
 
 ## 6. Testing
 
-Tests live in **YAML files**, separate from rule definitions. This follows the OpenFisca/PolicyEngine pattern but with enhancements for Cosilico's needs.
+Tests live in **YAML files**, separate from rule definitions. This is the canonical test format for Cosilico.
+
+> **Why YAML, not inline DSL tests?** The DSL supports a `test` block (see section 2.1) for documentation purposes, but YAML is the primary format for test suites. YAML tests are:
+> - Easier for AI to generate (structured data, not grammar)
+> - Editable by non-programmers (policy experts, IRS worksheets)
+> - Scriptable for bulk updates
+> - Colocated with rules by program (see directory structure in 7.13)
 
 ### 6.1 Why YAML for tests?
 
@@ -2751,25 +2757,27 @@ Sources: [Catala](https://catala-lang.org/), [DMN spec](https://www.omg.org/spec
 
 ## Appendix C: Implementation roadmap
 
-### Phase 1: Core language (Q1)
+Ordered by priority, not calendar. Each phase builds on the previous.
+
+### Phase 1: Core language
 - [ ] Grammar specification (EBNF)
 - [ ] Tree-sitter parser
 - [ ] Type system implementation
 - [ ] Python code generator
 - [ ] Basic CLI (`check`, `compile`)
 
-### Phase 2: Tooling (Q2)
+### Phase 2: Tooling
 - [ ] LSP server
 - [ ] VS Code extension
-- [ ] Test runner
+- [ ] Test runner (YAML format)
 - [ ] Migration tool from Python
 
-### Phase 3: Additional targets (Q3)
+### Phase 3: Additional targets
 - [ ] JavaScript generator
-- [ ] SQL generator
+- [ ] SQL generator (subset of operations)
 - [ ] WASM generator (via Rust)
 
-### Phase 4: Advanced features (Q4)
+### Phase 4: Advanced features
 - [ ] Literate programming mode
 - [ ] Formal verification integration
 - [ ] Web playground
@@ -2777,4 +2785,4 @@ Sources: [Catala](https://catala-lang.org/), [DMN spec](https://www.omg.org/spec
 
 ---
 
-*This specification is a living document. Updates will track implementation progress and community feedback.*
+*This specification is a living document. Updates track implementation progress and community feedback.*

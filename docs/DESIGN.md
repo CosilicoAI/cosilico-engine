@@ -86,16 +86,16 @@ variable eitc {
 │                          DEFINITION LAYER                            │
 │                                                                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │   Variables  │  │  Parameters  │  │   Entities   │               │
-│  │  (@variable) │  │ (@parameter) │  │   (@entity)  │               │
+│  │   .cosilico  │  │  parameters  │  │   entities   │               │
+│  │    files     │  │    .yaml     │  │    .yaml     │               │
 │  └──────────────┘  └──────────────┘  └──────────────┘               │
 │         │                 │                 │                        │
 │         └────────────────┬┴─────────────────┘                        │
 │                          ↓                                           │
 │                  ┌──────────────┐                                    │
 │                  │    Parser    │                                    │
-│                  │   (Python    │                                    │
-│                  │     AST)     │                                    │
+│                  │ (Tree-sitter │                                    │
+│                  │    grammar)  │                                    │
 │                  └──────────────┘                                    │
 └─────────────────────────────────────────────────────────────────────┘
                                    ↓
@@ -147,9 +147,9 @@ variable eitc {
 
 ### Component responsibilities
 
-| Component | Responsibility | Key Outputs |
+| Component | Responsibility | Key outputs |
 |-----------|---------------|-------------|
-| **Parser** | Extract rules from Python decorators | Raw AST nodes |
+| **Parser** | Parse .cosilico files via Tree-sitter grammar | Raw AST nodes |
 | **Dependency Graph** | Build variable dependency DAG | Topological order |
 | **Type Checker** | Validate types, periods, entities | Type-annotated IR |
 | **Period Validator** | Check period compatibility | Period-checked IR |
@@ -2328,7 +2328,7 @@ Many policy details exist only in guidance, not in statute or regulation:
 
 ---
 
-## 17. Microdata calibration layer
+## 16. Microdata calibration layer
 
 ### Problem statement
 
@@ -2618,15 +2618,15 @@ class CalibrationPerformance:
 
 ---
 
-## 18. Business model: open source code, paid data services
+## 17. Business model: open source code, paid data services
 
-### 18.1 Core principle
+### 17.1 Core principle
 
 **100% of code is open source. Paid services are for data and compute.**
 
 Anyone can clone our repos and run everything themselves. We charge when they use our infrastructure.
 
-### 18.2 What's open source (Apache 2.0)
+### 17.2 What's open source (Apache 2.0)
 
 Everything in git is free forever:
 
@@ -2646,7 +2646,7 @@ Users can:
 - Host their own API
 - Use in commercial products without restriction
 
-### 18.3 What's paid (our infrastructure)
+### 17.3 What's paid (our infrastructure)
 
 When users call `api.cosilico.ai`, they pay for:
 
@@ -2658,7 +2658,7 @@ When users call `api.cosilico.ai`, they pay for:
 | Large microsimulations | Compute | Census-scale processing |
 | Historical vintages | Storage | Years of versioned data |
 
-### 18.4 Pricing tiers
+### 17.4 Pricing tiers
 
 ```yaml
 free:
@@ -2696,7 +2696,7 @@ enterprise:
   rate_limit: Unlimited
 ```
 
-### 18.5 The value proposition
+### 17.5 The value proposition
 
 "Yes, you *could* run this yourself. But do you want to?"
 
@@ -2710,7 +2710,7 @@ Self-hosting requires:
 
 Or just call our API.
 
-### 18.6 Precedents
+### 17.6 Precedents
 
 This model works well for:
 
@@ -2722,7 +2722,7 @@ This model works well for:
 | Hugging Face | Transformers | Inference API |
 | Supabase | Supabase | Supabase Cloud |
 
-### 18.7 Why this works for Cosilico
+### 17.7 Why this works for Cosilico
 
 1. **Mission alignment** - Core rules engine free means maximum policy impact
 2. **Moat is data** - Rules are easy to copy; calibrated microdata is not
@@ -2734,17 +2734,21 @@ This model works well for:
 
 ## Appendix A: Comparison with OpenFisca
 
-| Aspect | OpenFisca | Cosilico |
-|--------|-----------|----------|
-| **Dependency Resolution** | Runtime (recursive) | Compile-time (DAG) |
-| **Type Checking** | Runtime coercion | Compile-time validation |
-| **Memory Model** | Clone per scenario | Copy-on-write |
-| **Targets** | Python only | Python, JS, WASM, SQL, Spark |
-| **Period Handling** | Implicit conversion | Explicit types |
-| **Entity Model** | Single-level groups | Multi-level hierarchy |
-| **Caching** | Per-variable holder | Graph-aware cache |
-| **Error Messages** | Stack traces | Source locations + suggestions |
-| **License** | AGPL (viral) | Apache 2.0 (permissive) |
+Based on analysis of [OpenFisca-Core](https://github.com/openfisca/openfisca-core) and [PolicyEngine-Core](https://github.com/PolicyEngine/policyengine-core) source code:
+
+| Aspect | OpenFisca | Cosilico (design goal) |
+|--------|-----------|------------------------|
+| **Dependency resolution** | Runtime recursive calls | Compile-time DAG construction |
+| **Type checking** | Runtime NumPy coercion | Compile-time validation |
+| **Memory model** | Full clone per scenario | Copy-on-write (planned) |
+| **Compilation targets** | Python only | Python first, then JS/WASM/SQL/Spark |
+| **Period handling** | Implicit conversion via holders | Explicit period types in signatures |
+| **Entity model** | Single parent per group | Multi-level hierarchy (planned) |
+| **Caching** | Per-variable holder cache | Graph-aware invalidation (planned) |
+| **Error messages** | Python stack traces | Source-mapped with suggestions (planned) |
+| **License** | AGPL-3.0 | Apache 2.0 |
+
+Note: "Cosilico" column reflects design goals. Items marked "(planned)" are not yet implemented.
 
 ---
 
