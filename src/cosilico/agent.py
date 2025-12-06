@@ -97,6 +97,38 @@ class AgentTrainingLoop:
         self.best_code: str | None = None
         self.best_accuracy: float = 0.0
 
+        # Cost tracking
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+
+    def get_cost_estimate(self) -> dict:
+        """Estimate API cost based on token usage.
+
+        Pricing (as of Dec 2024):
+        - Claude Sonnet: $3/M input, $15/M output
+        - Claude Opus: $15/M input, $75/M output
+        """
+        if "opus" in self.model.lower():
+            input_rate = 15.0 / 1_000_000
+            output_rate = 75.0 / 1_000_000
+        else:  # sonnet
+            input_rate = 3.0 / 1_000_000
+            output_rate = 15.0 / 1_000_000
+
+        input_cost = self.total_input_tokens * input_rate
+        output_cost = self.total_output_tokens * output_rate
+        total_cost = input_cost + output_cost
+
+        return {
+            "input_tokens": self.total_input_tokens,
+            "output_tokens": self.total_output_tokens,
+            "total_tokens": self.total_input_tokens + self.total_output_tokens,
+            "input_cost_usd": input_cost,
+            "output_cost_usd": output_cost,
+            "total_cost_usd": total_cost,
+            "model": self.model
+        }
+
     def _build_system_prompt(self) -> str:
         return """You are an expert tax law encoder. Your task is to convert statutory text into executable Cosilico DSL code.
 
@@ -311,6 +343,10 @@ Start by generating your initial DSL code and testing it."""
                 messages=messages
             )
 
+            # Track token usage
+            self.total_input_tokens += response.usage.input_tokens
+            self.total_output_tokens += response.usage.output_tokens
+
             # Process response
             assistant_content = response.content
             messages.append({"role": "assistant", "content": assistant_content})
@@ -373,14 +409,16 @@ Start by generating your initial DSL code and testing it."""
                 break
 
         # Build final result
+        cost = self.get_cost_estimate()
+
         if final_result:
-            success = "SUCCESS" in final_result.get("status", "")
             return {
                 "success": self.best_accuracy >= self.target_accuracy,
                 "final_code": self.best_code,
                 "final_accuracy": self.best_accuracy,
                 "iterations": self.iteration,
-                "submitted": True
+                "submitted": True,
+                "cost": cost
             }
         else:
             return {
@@ -388,7 +426,8 @@ Start by generating your initial DSL code and testing it."""
                 "final_code": self.best_code,
                 "final_accuracy": self.best_accuracy,
                 "iterations": self.iteration,
-                "submitted": False
+                "submitted": False,
+                "cost": cost
             }
 
 
@@ -473,6 +512,14 @@ def main():
     print(f"Final accuracy: {result['final_accuracy']:.1%}")
     print(f"Iterations: {result['iterations']}")
     print(f"Submitted: {result['submitted']}")
+
+    # Print cost
+    cost = result.get("cost", {})
+    print(f"\nAPI Usage:")
+    print(f"  Input tokens:  {cost.get('input_tokens', 0):,}")
+    print(f"  Output tokens: {cost.get('output_tokens', 0):,}")
+    print(f"  Total tokens:  {cost.get('total_tokens', 0):,}")
+    print(f"  Estimated cost: ${cost.get('total_cost_usd', 0):.4f}")
 
     if result["final_code"]:
         print("\nFinal code:")
