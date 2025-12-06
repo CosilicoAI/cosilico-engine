@@ -1,210 +1,123 @@
-# AI-Assisted Rules Encoding
+# AI Rules Engine
 
-Traditional rules-as-code requires manual translation: lawyers and engineers read statutes, write code. This doesn't scale.
+Cosilico is building AI that reads legislation and writes executable code.
 
-We flip the paradigm: **use existing implementations as verification oracles to train AI agents that learn to encode rules directly from legislation.**
+## The Vision
 
-## The Core Insight
+We're training AI agents to encode law directly from statutory text. Not translating from existing implementations. Not assisting human engineers. **Reading law and producing code.**
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Statute Text   │────▶│   AI Agent       │────▶│  Generated Code │
-│  (26 USC § 32)  │     │  (Policy Model)  │     │  (Cosilico DSL) │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                                                          │
-                                                          ▼
-                        ┌──────────────────┐     ┌─────────────────┐
-                        │  Reward Signal   │◀────│  Oracle Stack   │
-                        │  (0.0 - 1.0)     │     │  (PE, TAXSIM)   │
-                        └──────────────────┘     └─────────────────┘
+┌─────────────────┐                              ┌─────────────────┐
+│  26 USC § 32    │                              │  Executable     │
+│                 │────────▶  AI Agent  ────────▶│  Cosilico DSL   │
+│  (EITC statute) │                              │                 │
+└─────────────────┘                              └─────────────────┘
 ```
 
-This is **TDD at scale**:
-1. Generate test cases from existing implementations (oracles)
-2. AI agent generates code to pass those tests
-3. Iterate until passing
-4. The training data factory becomes the moat
+Existing implementations like PolicyEngine and TAXSIM become **verification oracles** - they provide the reward signal that trains the AI, not the source to translate from.
 
-## Why This Works
+## Why This Is Different
 
-### Existing Implementations as Ground Truth
+**Traditional approach:** Lawyers read statute → Engineers write code → QA validates
 
-PolicyEngine, TAXSIM, and other tax calculators have already encoded tax law. They may have different architectures, but they agree on outputs for most inputs.
+**Our approach:** AI reads statute → AI writes code → Oracles validate → AI improves
 
-Instead of manually translating their code to Cosilico DSL, we use them as **verification oracles**:
-- Generate thousands of test scenarios
+The human role shifts from implementation to oversight. We review edge cases, resolve oracle disagreements, and validate ambiguous interpretations - not write formulas.
+
+## How It Works
+
+### 1. Statute In, Code Out
+
+The AI agent receives:
+- Raw statutory text (26 USC § 32, California Revenue and Taxation Code, etc.)
+- The target DSL specification
+- Existing encoded rules as context
+
+It produces executable Cosilico DSL code organized by statutory citation.
+
+### 2. Oracles as Reward Function
+
+PolicyEngine, TAXSIM, and other implementations have already encoded tax law. They may disagree on edge cases, but they agree on the vast majority of scenarios.
+
+We use them as **ground truth**:
+- Generate thousands of test households
 - Run through oracles to get expected outputs
-- Train agents to produce code that matches
+- Score AI-generated code against oracle outputs
+- Iterate until convergence
 
-### Not One-Shot Generation
+This is **reinforcement learning from implementation feedback** - similar to RLHF, but with deterministic reward signals from code execution rather than human preferences.
 
-This is NOT asking an LLM to generate code in one pass. The agent iterates:
+### 3. Iterative Refinement
 
-1. Generate initial code
-2. Run tests against oracles
-3. Diagnose failures
-4. Revise code
-5. Repeat until passing
-
-The reward signal guides improvement.
-
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         ENCODER SYSTEM                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
-│  │   Statute   │  │  Test Case   │  │      Agent Loop       │  │
-│  │   Parser    │  │  Generator   │  │                       │  │
-│  │             │  │              │  │  ┌─────────────────┐  │  │
-│  │  - Extract  │  │  - Boundary  │  │  │  LLM (Claude/   │  │  │
-│  │    clauses  │  │  - Edge      │  │  │  GPT/Gemini)    │  │  │
-│  │  - Build    │  │  - Uniform   │  │  └────────┬────────┘  │  │
-│  │    context  │  │  - Random    │  │           │           │  │
-│  │             │  │              │  │           ▼           │  │
-│  └──────┬──────┘  └──────┬───────┘  │  ┌─────────────────┐  │  │
-│         │                │          │  │  Code Generator │  │  │
-│         │                │          │  └────────┬────────┘  │  │
-│         ▼                ▼          │           │           │  │
-│  ┌──────────────────────────────┐  │           ▼           │  │
-│  │       Context Builder        │  │  ┌─────────────────┐  │  │
-│  │                              │──┼─▶│  DSL Compiler   │  │  │
-│  │  - Statute text              │  │  └────────┬────────┘  │  │
-│  │  - Similar encoded rules     │  │           │           │  │
-│  │  - Parameter schemas         │  │           ▼           │  │
-│  │  - Failure diagnoses         │  │  ┌─────────────────┐  │  │
-│  └──────────────────────────────┘  │  │  Test Runner    │  │  │
-│                                    │  └────────┬────────┘  │  │
-│                                    │           │           │  │
-│                                    └───────────┼───────────┘  │
-│                                                │              │
-├────────────────────────────────────────────────┼──────────────┤
-│                     ORACLE STACK               │              │
-│  ┌──────────────────────────────────────────┐  │              │
-│  │                                          │  │              │
-│  │  ┌────────────┐  ┌────────────┐         │  │              │
-│  │  │PolicyEngine│  │  TAXSIM    │         │◀─┘              │
-│  │  │    -US     │  │  (NBER)    │   ...   │                 │
-│  │  └────────────┘  └────────────┘         │                 │
-│  │                                          │                 │
-│  │            ┌─────────────────┐           │                 │
-│  │            │    Consensus    │           │                 │
-│  │            │    Mechanism    │           │                 │
-│  │            └────────┬────────┘           │                 │
-│  │                     │                    │                 │
-│  └─────────────────────┼────────────────────┘                 │
-│                        │                                      │
-│                        ▼                                      │
-│                ┌───────────────┐                              │
-│                │ Reward Signal │──────────────────────────────┤
-│                │  (0.0 - 1.0)  │                              │
-│                └───────────────┘                              │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
-```
-
-## Key Components
-
-### Oracle Stack
-
-Multiple independent implementations provide robust ground truth:
-
-| Oracle | Coverage | Role |
-|--------|----------|------|
-| **PolicyEngine-US** | Federal + 50 states, benefits | Primary oracle, comprehensive |
-| **PolicyEngine-UK** | UK taxes + benefits | Cross-jurisdiction validation |
-| **TAXSIM (NBER)** | Federal + state income tax | Academic gold standard |
-| **IRS Published Examples** | Official scenarios | Authoritative edge cases |
-| **State DOR Calculators** | State-specific | State-level validation |
-
-When oracles disagree, the consensus mechanism flags for human review. Disagreements surface bugs in existing implementations or ambiguities in statute.
-
-### Test Case Generator
-
-Generates diverse scenarios to exercise the code:
-
-- **Boundary** - Values at thresholds and phase-outs
-- **Edge** - Zero income, maximum values, unusual filing statuses
-- **Uniform** - Random samples across input space
-- **Adversarial** - Designed to break common mistakes
-
-### Reward Function
-
-Two-level reward:
-
-1. **Structural (0-1)** - Does code follow DSL grammar? Use correct primitives? Have citations?
-2. **Semantic (0-1)** - Do calculations match oracles across test cases?
-
-Combined reward shapes learning from syntax compliance to calculation correctness.
-
-### Agent Loop
-
-The iterative refinement process:
+This is not one-shot generation. The agent iterates:
 
 ```python
 for iteration in range(max_iterations):
-    # Evaluate current code
-    reward = evaluate(generated_code, test_cases, oracles)
+    # Generate or revise code
+    code = agent.generate(statute, context, failures)
+
+    # Test against oracles
+    reward = evaluate(code, test_cases, oracles)
 
     if reward >= 0.99:
-        return success
+        return code  # Success
 
-    # Diagnose failures
-    failures = diagnose(generated_code, test_cases)
-
-    # Generate revision
-    generated_code = llm.revise(
-        current_code=generated_code,
-        failures=failures,
-        statute_text=statute
-    )
+    # Diagnose failures for next iteration
+    failures = diagnose(code, test_cases)
 ```
 
-## What We Optimize
+Each iteration improves based on structured failure feedback.
 
-We optimize the agent **workflow**, not model weights:
+### 4. Human Oversight
 
-| Component | What to Optimize | Metrics |
-|-----------|------------------|---------|
-| **Context window** | What statute context helps most | Iterations to convergence |
-| **Error formatting** | How to present failures to LLM | Fix rate per iteration |
-| **Test selection** | Which test cases are most diagnostic | Failure detection rate |
-| **Revision prompts** | Instructions that lead to fixes | Reward improvement per iteration |
-| **Curriculum order** | Which rules to learn first | Transfer to new rules |
+Humans handle what AI can't:
 
-## Scaling Strategy
+- **Oracle disagreements** - When PolicyEngine and TAXSIM disagree, which is right? Often neither - the disagreement surfaces a genuine ambiguity in statute.
+- **Edge case validation** - Novel scenarios with no oracle coverage
+- **Policy judgment** - When statute is genuinely ambiguous, legal interpretation is required
+- **Override mechanism** - Humans can correct AI outputs, and those corrections feed back into training
 
-### Within US Tax Code
+## The Training Data Factory
 
-```
-Phase 1: Simple provisions (standard deduction, brackets)
-    ↓
-Phase 2: Credits with phase-outs (CTC, EITC, education)
-    ↓
-Phase 3: Complex calculations (AMT, NIIT, self-employment)
-    ↓
-Phase 4: Full integration (Form 1040 line-by-line)
-```
+The moat isn't the encoded rules - those are open source. The moat is:
 
-### Cross-Jurisdiction Transfer
+1. **The oracle stack** - Unified interface to PolicyEngine, TAXSIM, IRS examples, state calculators
+2. **The test case generator** - Boundary cases, edge cases, adversarial scenarios
+3. **The curriculum** - Progressive complexity from simple deductions to full tax liability
+4. **The feedback loop** - Every human correction improves the system
 
-Once trained on US federal, transfer learning accelerates state encoding:
-- Many state rules reference federal calculations
-- State agent starts from federal patterns
-- Curriculum: simple coupling states → complex states
+Each jurisdiction we encode makes the next one faster. Each edge case we resolve trains better judgment.
 
-### New Legislation (No Oracle)
+## Scaling Path
 
-For brand-new laws with no existing implementation:
-1. Find similar encoded rules as templates
-2. Extract examples from bill text
-3. Generate with lower confidence threshold
-4. Flag for human review
+### Phase 1: US Federal Tax
+Train on IRC. PolicyEngine-US and TAXSIM provide dense oracle coverage.
 
-## Learn More
+### Phase 2: US States
+Transfer learning from federal. Most states couple to federal AGI - the agent already knows that structure.
 
-- {doc}`reward-functions` - Two-level reward system design
-- {doc}`oracle-stack` - Oracle consensus and disagreement handling
-- {doc}`curriculum` - Progressive complexity training
+### Phase 3: Benefits Programs
+SNAP, Medicaid, housing assistance. PolicyEngine covers these; expand oracle stack as needed.
+
+### Phase 4: International
+UK (PolicyEngine-UK as oracle), Canada, EU jurisdictions. Transfer learning across legal systems.
+
+### Phase 5: New Legislation
+When Congress passes new law, no oracle exists. The agent:
+- Uses similar existing rules as templates
+- Extracts examples from legislative text
+- Generates with lower confidence
+- Flags for human review
+
+Over time, confidence on new legislation increases as the agent learns statutory patterns.
+
+## What We're Building
+
+An AI system that:
+- Reads any tax or benefit statute
+- Produces executable, auditable code
+- Validates against multiple independent implementations
+- Improves continuously from human oversight
+- Scales across jurisdictions and legal domains
+
+This is computational law at scale.

@@ -30,14 +30,14 @@ parts:
       - file: DSL
         title: Full DSL Specification
 
-  - caption: AI Encoding
+  - caption: AI Rules Engine
     chapters:
       - file: ai-encoding/overview
       - file: ai-encoding/reward-functions
       - file: ai-encoding/oracle-stack
       - file: ai-encoding/curriculum
       - file: AI_ENCODING
-        title: Technical RL Framework
+        title: Technical Framework
 
   - caption: API Reference
     chapters:
