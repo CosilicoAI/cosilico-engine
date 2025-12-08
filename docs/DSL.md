@@ -120,34 +120,68 @@ def income_tax(tax_unit, period):
 
 ### 2.1 File structure
 
-Files use `.cosilico` extension and follow this structure:
+Files use `.cosilico` extension and follow this statute-organized structure:
+
+```
+us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/
+├── a/1/earned_income_credit.cosilico        # §32(a)(1)
+├── a/2/A/initial_credit_amount.cosilico     # §32(a)(2)(A)
+├── a/2/B/credit_reduction_amount.cosilico   # §32(a)(2)(B)
+├── b/1/credit_percentage.yaml               # §32(b)(1) parameters
+├── b/2/A/amounts.yaml                       # §32(b)(2)(A) parameters
+├── c/2/A/earned_income.cosilico             # §32(c)(2)(A) definition
+└── c/3/A/num_qualifying_children.cosilico   # §32(c)(3)(A) definition
+```
+
+**The path IS the legal citation.** Folder structure mirrors statute structure.
 
 ```cosilico
-# rules/us/federal/irs/credits/eitc.cosilico
+# us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/a/1/earned_income_credit.cosilico
 
 # File metadata
-module us.federal.irs.credits.eitc
+module us.irc.subtitle_a.chapter_1.subchapter_a.part_iv.subpart_c.§32.a.1
 version "2024.1"
 jurisdiction us
 
-# Imports
-import us.federal.irs.income (adjusted_gross_income, earned_income)
-import us.federal.irs.filing (filing_status)
+# References: alias variables by their statute paths
+references {
+  earned_income: us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/c/2/A/earned_income
+  adjusted_gross_income: us/irc/subtitle_a/chapter_1/subchapter_b/part_i/§62/a/adjusted_gross_income
+  filing_status: us/irc/subtitle_a/chapter_1/subchapter_a/part_i/§1/filing_status
+  initial_credit_amount: us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/a/2/A/initial_credit_amount
+  credit_reduction_amount: us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/a/2/B/credit_reduction_amount
+}
 
-# Variable definitions
-variable eitc { ... }
-variable eitc_phase_in { ... }
-variable eitc_phase_out { ... }
+# One variable per statutory clause
+variable earned_income_credit {
+  entity TaxUnit
+  period Year
+  dtype Money
+  reference "26 USC § 32(a)(1)"
 
-# Tests (inline, for documentation and validation)
-test "Single filer, $15k income" {
-  given {
-    person alice { age: 30, employment_income: 15000 }
-    tax_unit { members: [alice], filing_status: single }
+  formula {
+    # Use aliased references from the references block
+    return max(0, initial_credit_amount - credit_reduction_amount)
   }
-  expect {
-    eitc: 1502  # From IRS EITC tables
-  }
+}
+```
+
+### 2.1.1 References block
+
+The `references` block maps local aliases to statute paths. This:
+
+1. **Creates auditability**: Every variable use traces to a specific statute section
+2. **Enables cross-references**: When statute says "as defined in section 62", the code literally points to `§62`
+3. **Supports composition**: Complex calculations compose atomic pieces from different clauses
+
+```cosilico
+references {
+  # Alias: statute_path/variable_name
+  earned_income: us/irc/.../§32/c/2/A/earned_income
+  filing_status: us/irc/.../§1/filing_status
+
+  # Parameters can also be referenced
+  credit_percentage: us/irc/.../§32/b/1/credit_percentage
 }
 ```
 

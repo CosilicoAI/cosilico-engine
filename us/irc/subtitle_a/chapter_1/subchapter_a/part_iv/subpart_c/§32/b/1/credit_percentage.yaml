@@ -1,0 +1,41 @@
+# 26 USC §32(b)(1) - Credit and Phaseout Percentages
+#
+# "The credit percentage and the phaseout percentage shall be determined
+# as follows:"
+#
+# | Qualifying Children | Credit % | Phaseout % |
+# |---------------------|----------|------------|
+# | 0                   | 7.65%    | 7.65%      |
+# | 1                   | 34%      | 15.98%     |
+# | 2                   | 40%      | 21.06%     |
+# | 3+                  | 45%      | 21.06%     |
+
+credit_percentage:
+  description: EITC credit percentage (phase-in rate) by number of qualifying children
+  unit: rate
+  reference: "26 USC § 32(b)(1)"
+  indexed_by: [num_qualifying_children]
+
+  values:
+    - effective_from: 2024-01-01
+      source: "26 USC § 32(b)(1), Rev. Proc. 2023-34"
+      by_num_qualifying_children:
+        0: 0.0765
+        1: 0.34
+        2: 0.40
+        3: 0.45  # "3 or more"
+
+phaseout_percentage:
+  description: EITC phaseout percentage by number of qualifying children
+  unit: rate
+  reference: "26 USC § 32(b)(1)"
+  indexed_by: [num_qualifying_children]
+
+  values:
+    - effective_from: 2024-01-01
+      source: "26 USC § 32(b)(1), Rev. Proc. 2023-34"
+      by_num_qualifying_children:
+        0: 0.0765
+        1: 0.1598
+        2: 0.2106
+        3: 0.2106  # "3 or more"

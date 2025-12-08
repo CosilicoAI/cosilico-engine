@@ -92,38 +92,45 @@ Each statutory clause gets exactly one variable. Complex provisions become compo
 
 ### The Final Credit Composes Everything
 
-```python
-# §32/(a)/(1)/variables/earned_income_credit.cosilico
+```cosilico
+# us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/a/1/earned_income_credit.cosilico
+#
+# 26 USC §32(a)(1)
+#
+# "In the case of an eligible individual, there shall be allowed as a
+# credit against the tax imposed by this subtitle for the taxable year
+# an amount equal to the credit percentage of so much of the taxpayer's
+# earned income for the taxable year as does not exceed the earned
+# income amount, over [the phaseout reduction]."
 
-"""
-26 USC §32(a)(1)
+module us.irc.subtitle_a.chapter_1.subchapter_a.part_iv.subpart_c.§32.a.1
+version "2024.1"
+jurisdiction us
 
-"In the case of an eligible individual, there shall be allowed as a
-credit against the tax imposed by this subtitle for the taxable year
-an amount equal to the credit percentage of so much of the taxpayer's
-earned income for the taxable year as does not exceed the earned
-income amount, over [the phaseout reduction]."
-"""
+references {
+  # Eligibility from §32(c)(1)
+  is_eligible_individual: us/irc/.../§32/c/1/A/i/is_eligible_individual
 
-references:
-  has_qualifying_child: us/irc/.../§32/(c)/(1)/(A)/(i)/has_qualifying_child
-  meets_age_requirement: us/irc/.../§32/(c)/(1)/(A)/(ii)/meets_age_requirement
-  meets_filing_requirement: us/irc/.../§32/(c)/(1)/(B)/meets_filing_requirement
-  investment_income_disqualified: us/irc/.../§32/(i)/(1)/investment_income_disqualified
-  initial_credit_amount: us/irc/.../§32/(a)/(2)/(A)/initial_credit_amount
-  credit_reduction_amount: us/irc/.../§32/(a)/(2)/(B)/credit_reduction_amount
+  # Credit components from §32(a)(2)
+  initial_credit_amount: us/irc/.../§32/a/2/A/initial_credit_amount
+  credit_reduction_amount: us/irc/.../§32/a/2/B/credit_reduction_amount
+}
 
-def earned_income_credit() -> Money:
-    eligible = (
-        (has_qualifying_child or meets_age_requirement)
-        and meets_filing_requirement
-        and not investment_income_disqualified
-    )
+variable earned_income_credit {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  reference "26 USC § 32(a)(1)"
+  label "Earned Income Tax Credit"
 
-    if not eligible:
-        return 0
+  formula {
+    if not is_eligible_individual then
+      return 0
 
     return max(0, initial_credit_amount - credit_reduction_amount)
+  }
+}
 ```
 
 ## Handling Non-Statute Sources

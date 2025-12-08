@@ -16,6 +16,7 @@ class TokenType(Enum):
     VERSION = "version"
     JURISDICTION = "jurisdiction"
     IMPORT = "import"
+    REFERENCES = "references"  # New: statute-path references block
     VARIABLE = "variable"
     ENUM = "enum"
     ENTITY = "entity"
@@ -106,6 +107,37 @@ class ImportDecl:
     module_path: str
     names: list[str]  # ["*"] for wildcard
     alias: Optional[str] = None
+
+
+@dataclass
+class StatuteReference:
+    """A reference mapping a local alias to a statute path.
+
+    Example:
+        references {
+          earned_income: us/irc/subtitle_a/.../§32/c/2/A/earned_income
+          filing_status: us/irc/.../§1/filing_status
+        }
+    """
+    alias: str  # Local name used in formulas
+    statute_path: str  # Full statute path (us/irc/.../variable_name)
+
+
+@dataclass
+class ReferencesBlock:
+    """Block of statute-path references that alias variables for use in formulas."""
+    references: list[StatuteReference] = field(default_factory=list)
+
+    def get_path(self, alias: str) -> Optional[str]:
+        """Get the statute path for a given alias."""
+        for ref in self.references:
+            if ref.alias == alias:
+                return ref.statute_path
+        return None
+
+    def as_dict(self) -> dict[str, str]:
+        """Return references as alias -> path dict."""
+        return {ref.alias: ref.statute_path for ref in self.references}
 
 
 @dataclass
@@ -214,6 +246,7 @@ class Module:
     version_decl: Optional[VersionDecl] = None
     jurisdiction_decl: Optional[JurisdictionDecl] = None
     imports: list[ImportDecl] = field(default_factory=list)
+    references: Optional[ReferencesBlock] = None  # Statute-path references
     variables: list[VariableDef] = field(default_factory=list)
     enums: list[EnumDef] = field(default_factory=list)
 
@@ -222,7 +255,7 @@ class Lexer:
     """Tokenizer for Cosilico DSL."""
 
     KEYWORDS = {
-        "module", "version", "jurisdiction", "import", "variable", "enum",
+        "module", "version", "jurisdiction", "import", "references", "variable", "enum",
         "entity", "period", "dtype", "reference", "label", "description",
         "unit", "formula", "defined_for", "default", "private", "internal",
         "let", "return", "if", "then", "else", "match", "case",
@@ -250,8 +283,8 @@ class Lexer:
             # Numbers
             elif ch.isdigit() or (ch == '-' and self._peek(1).isdigit()):
                 self._read_number()
-            # Identifiers and keywords
-            elif ch.isalpha() or ch == '_':
+            # Identifiers and keywords (including § for statute section references)
+            elif ch.isalpha() or ch == '_' or ch == '§':
                 self._read_identifier()
             # Operators and symbols
             else:
@@ -282,7 +315,11 @@ class Lexer:
             if ch in ' \t\r\n':
                 self._advance()
             elif ch == '#':
-                # Skip to end of line
+                # Skip to end of line (# style comment)
+                while self.pos < len(self.source) and self.source[self.pos] != '\n':
+                    self._advance()
+            elif ch == '/' and self.pos + 1 < len(self.source) and self.source[self.pos + 1] == '/':
+                # Skip to end of line (// style comment)
                 while self.pos < len(self.source) and self.source[self.pos] != '\n':
                     self._advance()
             else:
@@ -335,7 +372,12 @@ class Lexer:
         start_line, start_col = self.line, self.column
         value = ""
 
-        while self.pos < len(self.source) and (self.source[self.pos].isalnum() or self.source[self.pos] == '_'):
+        # Allow alphanumeric, underscore, and § (section symbol) in identifiers
+        while self.pos < len(self.source) and (
+            self.source[self.pos].isalnum() or
+            self.source[self.pos] == '_' or
+            self.source[self.pos] == '§'
+        ):
             value += self._advance()
 
         # Check if keyword
@@ -424,6 +466,8 @@ class Parser:
                 module.jurisdiction_decl = self._parse_jurisdiction_decl()
             elif self._check(TokenType.IMPORT):
                 module.imports.append(self._parse_import())
+            elif self._check(TokenType.REFERENCES):
+                module.references = self._parse_references_block()
             elif self._check(TokenType.PRIVATE) or self._check(TokenType.INTERNAL):
                 visibility = self._advance().value
                 if self._check(TokenType.VARIABLE):
@@ -507,6 +551,67 @@ class Parser:
         # Check for 'as alias' pattern
 
         return ImportDecl(module_path=module_path, names=names, alias=alias)
+
+    def _parse_references_block(self) -> ReferencesBlock:
+        """Parse a references block mapping aliases to statute paths.
+
+        Syntax:
+            references {
+              earned_income: us/irc/subtitle_a/.../§32/c/2/A/earned_income
+              filing_status: us/irc/.../§1/filing_status
+            }
+        """
+        self._consume(TokenType.REFERENCES, "Expected 'references'")
+        self._consume(TokenType.LBRACE, "Expected '{'")
+
+        references = []
+
+        while not self._check(TokenType.RBRACE) and not self._is_at_end():
+            # Parse alias name
+            alias = self._consume(TokenType.IDENTIFIER, "Expected alias name").value
+
+            self._consume(TokenType.COLON, "Expected ':'")
+
+            # Parse statute path (can contain /, §, and other characters)
+            statute_path = self._parse_statute_path()
+
+            references.append(StatuteReference(alias=alias, statute_path=statute_path))
+
+        self._consume(TokenType.RBRACE, "Expected '}'")
+
+        return ReferencesBlock(references=references)
+
+    def _parse_statute_path(self) -> str:
+        """Parse a statute path like 'us/irc/subtitle_a/.../§32/c/2/A/variable_name'."""
+        # Consume tokens until we hit something that's not part of a path
+        # Path components: identifiers, numbers, §, /, .
+        parts = []
+
+        # First component must be identifier
+        parts.append(self._consume(TokenType.IDENTIFIER, "Expected path component").value)
+
+        while True:
+            if self._check(TokenType.SLASH):
+                self._advance()
+                parts.append("/")
+                # Next can be identifier, number, or special chars
+                if self._check(TokenType.IDENTIFIER):
+                    parts.append(self._advance().value)
+                elif self._check(TokenType.NUMBER):
+                    parts.append(str(self._advance().value))
+                else:
+                    break
+            elif self._check(TokenType.DOT):
+                # Could be .. in path
+                self._advance()
+                parts.append(".")
+                if self._check(TokenType.DOT):
+                    self._advance()
+                    parts.append(".")
+            else:
+                break
+
+        return "".join(parts)
 
     def _parse_dotted_name(self) -> str:
         name = self._consume(TokenType.IDENTIFIER, "Expected identifier").value

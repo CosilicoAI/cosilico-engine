@@ -70,12 +70,54 @@ DSL_SYSTEM_PROMPT = """You are an expert tax law encoder. Your task is to conver
 
 ## Cosilico DSL Overview
 
-Cosilico DSL is a purpose-built language for encoding tax and benefit rules. It's designed to be:
-- **Safe**: Pure functional, no side effects
+Cosilico DSL is a purpose-built language for encoding tax and benefit rules. Key principles:
+- **Statute-organized**: Code structure mirrors legal structure (path = citation)
+- **No hardcoded values**: All rates, thresholds, and amounts come from parameter references
+- **References block**: Variables are aliased by their statute paths before use in formulas
 - **Traceable**: Every rule links to legal citations
-- **AI-native**: Structured grammar that's easy to generate correctly
+
+## File Organization
+
+**The path IS the legal citation.** Files live at statute paths:
+
+```
+us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/
+├── a/1/earned_income_credit.cosilico        # §32(a)(1)
+├── a/2/A/initial_credit_amount.cosilico     # §32(a)(2)(A)
+├── b/1/credit_percentage.yaml               # §32(b)(1) parameters
+```
 
 ## DSL Syntax
+
+### Module Declaration
+
+```cosilico
+# Module path matches file location
+module us.irc.subtitle_a.chapter_1.subchapter_a.part_iv.subpart_c.§32.a.1
+version "2024.1"
+jurisdiction us
+```
+
+### References Block (CRITICAL)
+
+The `references` block maps local aliases to statute paths. This creates auditability
+by tracing every variable use to a specific statute section.
+
+```cosilico
+references {
+  # Alias: statute_path/variable_name
+  earned_income: us/irc/subtitle_a/.../§32/c/2/A/earned_income
+  adjusted_gross_income: us/irc/subtitle_a/.../§62/a/adjusted_gross_income
+  filing_status: us/irc/subtitle_a/.../§1/filing_status
+
+  # Credit components from other subsections
+  initial_credit_amount: us/irc/subtitle_a/.../§32/a/2/A/initial_credit_amount
+  credit_reduction_amount: us/irc/subtitle_a/.../§32/a/2/B/credit_reduction_amount
+
+  # Parameters can also be referenced
+  credit_percentage: us/irc/subtitle_a/.../§32/b/1/credit_percentage
+}
+```
 
 ### Variable Definition
 
@@ -84,110 +126,145 @@ variable <name> {
   entity <EntityType>           # Person, TaxUnit, Household
   period <PeriodType>           # Year, Month
   dtype <DataType>              # Money, Rate, Count, Bool
-  reference "<legal citation>"  # Required - cite the statute
+  reference "<legal citation>"  # Required - cite the exact statute subsection
 
   formula {
+    # Use aliased names from references block
     let <var> = <expression>
     return <expression>
   }
 }
 ```
 
-### Available Data Types
-- `Money` - Currency amounts (e.g., $1234.56)
-- `Rate` - Decimal rates (e.g., 0.0765)
-- `Count` - Non-negative integers
-- `Bool` - true/false
+### Parameter References
+
+Parameters are stored in YAML files at their statute location and referenced by path:
+
+```cosilico
+# Indexed by number of children
+parameter(gov.irs.eitc.phase_in_rate[n_children])
+
+# Indexed by filing status
+parameter(gov.irs.deductions.standard[filing_status])
+```
+
+**IMPORTANT**: Do NOT hardcode numeric values. Always use parameter() references.
 
 ### Expressions
 
 **Arithmetic:** `+`, `-`, `*`, `/`
 **Comparison:** `==`, `!=`, `<`, `>`, `<=`, `>=`
 **Logical:** `and`, `or`, `not`
-**Functions:** `min(a, b)`, `max(a, b)`, `abs(x)`, `clamp(x, lo, hi)`
+**Functions:** `min(a, b)`, `max(a, b)`, `abs(x)`
 
 **Conditionals:**
 ```cosilico
-if condition then value_if_true else value_if_false
-
-match {
-  case condition1 => value1
-  case condition2 => value2
-  else => default_value
-}
+if condition then expr1 else expr2
 ```
 
-### Variable References
+## Complete Example: EITC (26 USC §32)
 
 ```cosilico
-variable(earned_income)                    # Reference another variable
-parameter(gov.irs.eitc.phase_in_rate)     # Reference a parameter
-parameter(gov.irs.eitc.rate[n_children])  # Indexed parameter
-```
+# us/irc/subtitle_a/chapter_1/subchapter_a/part_iv/subpart_c/§32/a/1/earned_income_credit.cosilico
+#
+# 26 USC §32(a)(1) - Earned Income Credit
+#
+# "In the case of an eligible individual, there shall be allowed as a credit
+# against the tax imposed by this subtitle for the taxable year an amount
+# equal to the credit percentage of so much of the taxpayer's earned income
+# for the taxable year as does not exceed the earned income amount."
 
-### Input Variables
-
-These variables are provided as inputs (no formula needed):
-- `earned_income` - Employment/self-employment income
-- `n_qualifying_children` or `n_children` - Number of qualifying children
-- `filing_status` - SINGLE, JOINT, HEAD_OF_HOUSEHOLD, MARRIED_FILING_SEPARATELY
-- `agi` or `adjusted_gross_income` - Adjusted gross income
-- Other inputs as specified in test cases
-
-## Example: EITC Phase-In Credit
-
-```cosilico
-module us.federal.irs.credits.eitc
+module us.irc.subtitle_a.chapter_1.subchapter_a.part_iv.subpart_c.§32.a.1
 version "2024.1"
 jurisdiction us
 
-variable eitc_phase_in {
+references {
+  # Inputs from other IRC sections
+  earned_income: us/irc/subtitle_a/.../§32/c/2/A/earned_income
+  adjusted_gross_income: us/irc/subtitle_a/.../§62/a/adjusted_gross_income
+  filing_status: us/irc/subtitle_a/.../§1/filing_status
+
+  # Eligibility from §32(c)(1)
+  is_eligible_individual: us/irc/subtitle_a/.../§32/c/1/A/i/is_eligible_individual
+
+  # Credit components from §32(a)(2)
+  initial_credit_amount: us/irc/subtitle_a/.../§32/a/2/A/initial_credit_amount
+  credit_reduction_amount: us/irc/subtitle_a/.../§32/a/2/B/credit_reduction_amount
+}
+
+variable earned_income_credit {
   entity TaxUnit
   period Year
   dtype Money
+  unit "USD"
   reference "26 USC § 32(a)(1)"
+  label "Earned Income Tax Credit"
 
   formula {
-    let earned = variable(earned_income)
-    let n_children = variable(n_qualifying_children)
+    # Only eligible individuals receive the credit
+    if not is_eligible_individual then
+      return 0
 
-    # Phase-in rates by number of children (2024)
-    let rate = match {
-      case n_children == 0 => 0.0765
-      case n_children == 1 => 0.34
-      case n_children == 2 => 0.40
-      else => 0.45
-    }
+    # Credit = phase-in amount minus phase-out reduction, but not below zero
+    return max(0, initial_credit_amount - credit_reduction_amount)
+  }
+}
+```
 
-    # Earned income amounts (caps)
-    let cap = match {
-      case n_children == 0 => 7840
-      case n_children == 1 => 11750
-      else => 16510
-    }
+## Phase-In Calculation (§32(a)(2)(A))
 
-    return min(earned, cap) * rate
+```cosilico
+# us/irc/.../§32/a/2/A/initial_credit_amount.cosilico
+
+module us.irc.subtitle_a.chapter_1.subchapter_a.part_iv.subpart_c.§32.a.2.A
+version "2024.1"
+jurisdiction us
+
+references {
+  earned_income: us/irc/.../§32/c/2/A/earned_income
+  num_qualifying_children: us/irc/.../§32/c/3/A/num_qualifying_children
+
+  # Parameters from §32(b)
+  credit_percentage: us/irc/.../§32/b/1/credit_percentage
+  earned_income_amount: us/irc/.../§32/b/2/A/earned_income_amount
+}
+
+variable initial_credit_amount {
+  entity TaxUnit
+  period Year
+  dtype Money
+  reference "26 USC § 32(a)(2)(A)"
+
+  formula {
+    # Get parameters indexed by number of qualifying children
+    let rate = credit_percentage[num_qualifying_children]
+    let cap = earned_income_amount[num_qualifying_children]
+
+    # Credit = rate × min(earned_income, cap)
+    return rate * min(earned_income, cap)
   }
 }
 ```
 
 ## Important Rules
 
-1. **Always include metadata**: module, entity, period, dtype, reference
-2. **Reference inputs correctly**: Use `variable(input_name)` for inputs
-3. **Use match expressions** for multi-way conditionals
-4. **Cite the statute** in the reference field
-5. **Return the computed value** at the end of the formula
+1. **MODULE PATH = FILE PATH**: Module declaration matches the statute-organized file location
+2. **REFERENCES BLOCK**: Declare all external variables/parameters with statute paths
+3. **NO HARDCODED VALUES**: Use parameter() or references for all rates, amounts, thresholds
+4. **ONE VARIABLE PER CLAUSE**: Each statutory subsection gets its own file/variable
+5. **USE ALIASES IN FORMULAS**: After declaring in references, use the alias names directly
 
 ## Your Task
 
 1. Read the statutory text carefully
-2. Generate Cosilico DSL code that implements it
-3. Use the `execute_dsl` tool to test your implementation
-4. Analyze failures and adjust rates/thresholds/logic
-5. When you reach 95%+ accuracy, use `submit_final_code`
+2. Identify the statute section (e.g., "26 USC § 32(a)(1)")
+3. Create module path matching the statute structure
+4. Declare references for all inputs and dependencies
+5. Generate DSL code using references and parameters - NO hardcoded values
+6. Use the `execute_dsl` tool to test your implementation
+7. When you reach 95%+ accuracy, use `submit_final_code`
 
-Be precise with parameters - small errors in rates or thresholds cause test failures."""
+The parameter values are already defined in the system. Your job is to write the FORMULA that correctly combines them using proper references."""
 
 
 class DSLAgentTrainingLoop:
@@ -210,8 +287,11 @@ class DSLAgentTrainingLoop:
         # System prompt - use provided or default
         self.system_prompt = system_prompt or DSL_SYSTEM_PROMPT
 
-        # Execution components - use DSL executor
-        self.executor = DSLExecutor(parameters=parameters or get_default_parameters())
+        # Execution components - use DSL executor with YAML parameters
+        self.executor = DSLExecutor(
+            parameters=parameters or get_default_parameters(),
+            use_yaml_params=True,
+        )
         self.scorer = Scorer()
         self.diagnoser = FailureDiagnoser()
 

@@ -5,13 +5,17 @@ that executes formulas with inputs and parameters.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from .dsl_parser import (
     BinaryOp, Expression, FormulaBlock, FunctionCall, Identifier,
     IfExpr, LetBinding, Literal, MatchExpr, Module, ParameterRef,
+    ReferencesBlock, StatuteReference,
     UnaryOp, VariableDef, VariableRef, parse_dsl,
 )
+from .parameters.loader import load_parameters
+from .parameters.schema import ParameterStore as YAMLParameterStore
 from .types import ExecutionResult, GeneratedCode, TestCase
 
 
@@ -19,18 +23,36 @@ from .types import ExecutionResult, GeneratedCode, TestCase
 class ParameterStore:
     """Stores parameter values for execution.
 
-    In production, this would load from YAML parameter files.
-    For now, we support programmatic parameter setting.
+    Supports both:
+    1. YAML-loaded parameters from rules/ directory
+    2. Programmatically set parameters (legacy/testing)
     """
 
     params: dict[str, Any]
+    yaml_store: Any = None  # Optional: parameters.ParameterStore
 
-    def get(self, path: str, index: Optional[Any] = None) -> Any:
+    def get(self, path: str, index: Optional[Any] = None, **indices: Any) -> Any:
         """Get a parameter value by path.
 
         Path format: "gov.irs.eitc.phase_in_rate"
         Index: for parameterized values like rate[n_children]
         """
+        # Try YAML store first if available
+        if self.yaml_store is not None:
+            try:
+                if index is not None:
+                    # Determine index name from path
+                    if "n_children" in str(index) or isinstance(index, int):
+                        return self.yaml_store.get(path, n_children=index, **indices)
+                    elif index in ("SINGLE", "JOINT", "HEAD_OF_HOUSEHOLD", "MARRIED_FILING_SEPARATELY"):
+                        return self.yaml_store.get(path, filing_status=index, **indices)
+                    else:
+                        return self.yaml_store.get(path, **{str(index): index}, **indices)
+                return self.yaml_store.get(path, **indices)
+            except (KeyError, ValueError):
+                pass  # Fall through to legacy lookup
+
+        # Legacy nested dict lookup
         parts = path.split(".")
         current = self.params
 
@@ -54,9 +76,24 @@ class ExecutionContext:
     parameters: ParameterStore
     variables: dict[str, VariableDef]
     computed: dict[str, Any]  # Cache of computed variable values
+    references: Optional[ReferencesBlock] = None  # Statute-path references
+
+    def resolve_reference(self, alias: str) -> Optional[str]:
+        """Resolve an alias to its statute path.
+
+        Returns the statute path if alias is in references, None otherwise.
+        """
+        if self.references:
+            return self.references.get_path(alias)
+        return None
 
     def get_variable(self, name: str) -> Any:
-        """Get a variable value - from inputs, computed, or compute it."""
+        """Get a variable value - from inputs, computed, or compute it.
+
+        If the name is an alias in the references block, it will be resolved
+        to the underlying variable. For now, we extract the variable name
+        from the statute path (last component after /).
+        """
         # Check computed cache first
         if name in self.computed:
             return self.computed[name]
@@ -64,6 +101,16 @@ class ExecutionContext:
         # Check inputs
         if name in self.inputs:
             return self.inputs[name]
+
+        # Check if this is an aliased reference
+        statute_path = self.resolve_reference(name)
+        if statute_path:
+            # Extract variable name from path (last component)
+            # e.g., "us/irc/.../§32/c/2/A/earned_income" -> "earned_income"
+            actual_name = statute_path.split("/")[-1]
+            # Avoid infinite recursion
+            if actual_name != name:
+                return self.get_variable(actual_name)
 
         # Try to compute from variable definition
         if name in self.variables:
@@ -114,6 +161,19 @@ def evaluate_expression(expr: Expression, ctx: ExecutionContext) -> Any:
         return _apply_unary_op(expr.op, operand)
 
     if isinstance(expr, FunctionCall):
+        # Special case: parameter() is a pseudo-function that wraps a ParameterRef
+        # The ParameterRef is already evaluated when we process the args
+        if expr.name == "parameter" and len(expr.args) == 1:
+            return evaluate_expression(expr.args[0], ctx)
+
+        # Special case: variable() references another variable
+        if expr.name == "variable" and len(expr.args) == 1:
+            arg = expr.args[0]
+            if isinstance(arg, Identifier):
+                return ctx.get_variable(arg.name)
+            # If it's already a name string
+            return ctx.get_variable(str(evaluate_expression(arg, ctx)))
+
         args = [evaluate_expression(arg, ctx) for arg in expr.args]
         return _call_builtin(expr.name, args, ctx)
 
@@ -267,11 +327,16 @@ def _calculate_marginal_rate(brackets: dict, amount: float) -> float:
 class DSLExecutor:
     """Executes DSL code against test cases."""
 
-    def __init__(self, parameters: Optional[dict] = None):
+    def __init__(
+        self,
+        parameters: Optional[dict] = None,
+        rules_dir: Optional[str] = None,
+        use_yaml_params: bool = True,
+    ):
         """Initialize with parameter values.
 
         Args:
-            parameters: Dict of parameter values, e.g.:
+            parameters: Dict of parameter values (legacy format), e.g.:
                 {
                     "gov": {
                         "irs": {
@@ -281,12 +346,27 @@ class DSLExecutor:
                         }
                     }
                 }
+            rules_dir: Directory containing YAML parameter files (default: rules/)
+            use_yaml_params: If True, load parameters from YAML files
         """
-        self.parameter_store = ParameterStore(params=parameters or {})
+        yaml_store = None
+        if use_yaml_params:
+            try:
+                yaml_store = load_parameters(rules_dir)
+            except Exception as e:
+                print(f"Warning: Could not load YAML parameters: {e}")
+
+        self.parameter_store = ParameterStore(
+            params=parameters or {},
+            yaml_store=yaml_store,
+        )
 
     def set_parameters(self, params: dict):
-        """Set parameter values."""
-        self.parameter_store = ParameterStore(params=params)
+        """Set parameter values (preserves YAML store)."""
+        self.parameter_store = ParameterStore(
+            params=params,
+            yaml_store=self.parameter_store.yaml_store,
+        )
 
     def execute(
         self,
@@ -336,12 +416,13 @@ class DSLExecutor:
     ) -> ExecutionResult:
         """Execute against a single test case."""
         try:
-            # Create execution context
+            # Create execution context with references from module
             ctx = ExecutionContext(
                 inputs=test_case.inputs,
                 parameters=self.parameter_store,
                 variables=variables,
                 computed={},
+                references=module.references,  # Pass statute-path references
             )
 
             # Find the main variable to compute

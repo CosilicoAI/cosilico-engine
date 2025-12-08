@@ -1,0 +1,69 @@
+# 26 USC §32(b)(2)(A) - Earned Income and Phaseout Amounts
+#
+# "The earned income amount and the phaseout amount shall be determined
+# as follows:"
+#
+# | Qualifying Children | Earned Income Amount | Phaseout Amount |
+# |---------------------|---------------------|-----------------|
+# | 0                   | $7,840              | $9,800          |
+# | 1                   | $12,390             | $21,560         |
+# | 2                   | $17,400             | $21,560         |
+# | 3+                  | $17,400             | $21,560         |
+#
+# Note: Amounts are inflation-adjusted annually per §32(j)
+
+earned_income_amount:
+  description: Maximum earned income for EITC phase-in calculation
+  unit: USD
+  reference: "26 USC § 32(b)(2)(A)"
+  indexed_by: [num_qualifying_children]
+  inflation_adjustment: "§32(j)"
+
+  values:
+    - effective_from: 2024-01-01
+      source: "Rev. Proc. 2023-34, Section 3.07"
+      by_num_qualifying_children:
+        0: 7840
+        1: 12390
+        2: 17400
+        3: 17400  # "3 or more"
+
+phaseout_amount:
+  description: Income threshold where EITC phase-out begins
+  unit: USD
+  reference: "26 USC § 32(b)(2)(A)"
+  indexed_by: [num_qualifying_children]
+  inflation_adjustment: "§32(j)"
+
+  values:
+    - effective_from: 2024-01-01
+      source: "Rev. Proc. 2023-34, Section 3.07"
+      by_num_qualifying_children:
+        0: 9800
+        1: 21560
+        2: 21560
+        3: 21560  # "3 or more"
+
+agi_limit:
+  description: Maximum AGI for EITC eligibility (income at which credit phases out completely)
+  unit: USD
+  reference: "26 USC § 32(b)(2)(A), derived"
+  indexed_by: [num_qualifying_children, filing_status]
+  note: "Calculated as phaseout_amount + (max_credit / phaseout_percentage)"
+
+  values:
+    - effective_from: 2024-01-01
+      source: "Rev. Proc. 2023-34"
+      by_num_qualifying_children:
+        0:
+          SINGLE: 18591
+          JOINT: 25511
+        1:
+          SINGLE: 49084
+          JOINT: 56004
+        2:
+          SINGLE: 55768
+          JOINT: 62688
+        3:
+          SINGLE: 59899
+          JOINT: 66819
