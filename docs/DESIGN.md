@@ -3190,6 +3190,346 @@ Calibration ensures microdata matches administrative totals under **current law 
 
 ---
 
+## 19. Law Archive: unified source of truth
+
+The **law as code** paradigm requires tight integration between statute text and executable encodings. `cosilico/lawarchive` serves as the single source of truth for both.
+
+### 19.1 Architecture: law archive as central hub
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            LAW ARCHIVE (cosilico-lawarchive)                 │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         Statute Storage                              │   │
+│  │                                                                      │   │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │   │
+│  │  │  Raw Text    │───▶│  Structured  │───▶│   Encoded    │          │   │
+│  │  │  (USLM XML)  │    │   Rules      │    │   Formula    │          │   │
+│  │  │              │    │  (DSL/AST)   │    │ (Python/JS)  │          │   │
+│  │  └──────────────┘    └──────────────┘    └──────────────┘          │   │
+│  │                                                                      │   │
+│  │  Indexed by: citation + vintage + application_period                 │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│                                     │                                        │
+│              ┌──────────────────────┼──────────────────────┐                │
+│              ▼                      ▼                      ▼                │
+│  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐        │
+│  │    REST API      │   │   CLI (pull/     │   │    AI Agent      │        │
+│  │  (production)    │   │   push/sync)     │   │   (encoder)      │        │
+│  └──────────────────┘   └──────────────────┘   └──────────────────┘        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          COSILICO ENGINE                                     │
+│                                                                              │
+│  Pulls formulas from lawarchive → compiles to Python/JS/WASM/SQL            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 19.2 Bi-temporal model for logic (not just parameters)
+
+Section 12 introduced bi-temporal parameters. The same model applies to **formula logic**:
+
+| Dimension | Parameter Example | Logic Example |
+|-----------|-------------------|---------------|
+| **Vintage** | CTC max = $2000 (TCJA) | Refundable = min($1400, 15% of EI over $2500) |
+| **Application date** | CTC in 2025 vs 2030 | Phase-out applies after 2025 |
+
+**Key insight:** The law may specify different formulas for different application periods, all enacted at the same vintage.
+
+```python
+# Example: CTC refundability under different vintages
+
+# TCJA vintage (2017-12-22) - applies 2018-2025
+class ctc_refundable__tcja(Variable):
+    vintage = "2017-12-22"
+    applies_from = "2018-01-01"
+    applies_to = "2025-12-31"
+
+    def formula(person, period):
+        earned_income = person("earned_income", period)
+        return min(1400, 0.15 * max(0, earned_income - 2500))
+
+# TCJA vintage ALSO specifies post-sunset logic
+class ctc_refundable__tcja_sunset(Variable):
+    vintage = "2017-12-22"  # Same vintage!
+    applies_from = "2026-01-01"
+
+    def formula(person, period):
+        earned_income = person("earned_income", period)
+        return 0.15 * max(0, earned_income - 3000)  # Pre-TCJA rules
+
+# ARPA vintage (2021-03-11) - 2021 only
+class ctc_refundable__arpa(Variable):
+    vintage = "2021-03-11"
+    applies_from = "2021-01-01"
+    applies_to = "2021-12-31"
+
+    def formula(person, period):
+        return person("ctc_max_amount", period)  # Fully refundable
+```
+
+**Query semantics:**
+
+```python
+# "Under TCJA rules, what is refundable CTC formula for 2030?"
+formula = lawarchive.get_formula(
+    variable="ctc_refundable",
+    vintage="2017-12-22",
+    application_date="2030-01-01"
+)
+# Returns: ctc_refundable__tcja_sunset (sunset kicks in)
+
+# "Under current law (2024), what is refundable CTC formula for 2025?"
+formula = lawarchive.get_formula(
+    variable="ctc_refundable",
+    vintage="2024-01-01",  # Latest known law
+    application_date="2025-01-01"
+)
+# Returns: ctc_refundable__tcja (still in effect)
+```
+
+### 19.3 Law archive data model
+
+```python
+@dataclass
+class LawSection:
+    """A section of law with its encodings."""
+
+    # Identity
+    citation: Citation           # e.g., "26 USC 32"
+    vintage: date               # When this version was enacted
+    public_law: str             # e.g., "P.L. 117-169"
+
+    # Raw content
+    text: str                   # Statute text
+    subsections: list[Subsection]
+
+    # Application period (what the law says it applies to)
+    applies_from: date          # "For taxable years beginning after..."
+    applies_to: Optional[date]  # Sunset date, if any
+
+    # Structured representation
+    rules: list[Rule]           # Parsed rules with conditions/values
+    parameters: list[Parameter] # Extracted parameters
+
+    # Encoded implementation
+    formula_source: str         # Cosilico DSL code
+    compiled_python: str        # Generated Python
+    compiled_js: Optional[str]  # Generated JavaScript
+
+    # Provenance
+    encoded_by: str             # "claude-opus-4" / "human:jsmith"
+    encoded_at: datetime
+    verified_by: list[str]      # Review trail
+    test_cases: list[TestCase]  # Validation tests
+
+
+@dataclass
+class LawArchiveIndex:
+    """Index for querying law sections."""
+
+    def get(
+        self,
+        citation: str,
+        vintage: Optional[date] = None,      # Default: latest
+        application_date: Optional[date] = None,  # Default: today
+    ) -> LawSection:
+        """Get law section matching citation + temporal criteria."""
+        ...
+
+    def get_formula(
+        self,
+        variable: str,
+        vintage: Optional[date] = None,
+        application_date: Optional[date] = None,
+    ) -> Formula:
+        """Get encoded formula for a variable."""
+        ...
+
+    def history(self, citation: str) -> list[LawSection]:
+        """Get all versions of a section across vintages."""
+        ...
+```
+
+### 19.4 CLI workflow: pull/push/sync
+
+Developers (human or AI) work locally, then sync with the central archive:
+
+```bash
+# Authenticate (once)
+lawarchive auth
+
+# Pull statute + encoding to work locally
+lawarchive pull "26 USC 32" --vintage=2024-01-01
+
+# Creates local workspace:
+# ~/.lawarchive/workspace/federal/statute/26/32/
+#   ├── statute.md          # Raw text (read-only reference)
+#   ├── rules.cosilico      # DSL encoding (editable)
+#   ├── tests.yaml          # Test cases
+#   └── metadata.json       # Vintage, provenance
+
+# Edit locally (Claude or human)
+claude "update rules.cosilico to handle the new phase-out"
+
+# Validate before push
+lawarchive validate ./26/32/
+# ✓ DSL parses correctly
+# ✓ Types check
+# ✓ 47/47 test cases pass
+# ✓ Citations verify against statute text
+
+# Push back to archive
+lawarchive push ./26/32/
+# → Uploads to central DB
+# → Records provenance (who, when, what changed)
+
+# Sync (bidirectional)
+lawarchive sync
+# → Pulls updates from remote
+# → Pushes local changes
+# → Handles conflicts
+```
+
+### 19.5 AI encoding workflow
+
+The AI agent uses lawarchive as both input and output:
+
+```python
+class AIEncoder:
+    """AI agent that encodes statutes into Cosilico DSL."""
+
+    def encode_section(self, citation: str, vintage: date) -> Encoding:
+        # 1. Pull statute from lawarchive
+        section = lawarchive.get(citation, vintage=vintage)
+
+        # 2. Get related context
+        references = lawarchive.get_references(citation)
+        similar_encodings = lawarchive.search_similar(section.text)
+
+        # 3. Generate encoding
+        encoding = self.llm.encode(
+            statute_text=section.text,
+            subsections=section.subsections,
+            reference_encodings=similar_encodings,  # Learn from existing
+            test_cases=self._generate_test_cases(section),
+        )
+
+        # 4. Validate
+        validation = lawarchive.validate(encoding)
+        if not validation.passed:
+            encoding = self._fix_errors(encoding, validation.errors)
+
+        # 5. Push back to lawarchive
+        lawarchive.store_encoding(
+            citation=citation,
+            vintage=vintage,
+            formula=encoding.dsl,
+            test_cases=encoding.tests,
+            encoded_by=f"claude-{self.model_version}",
+        )
+
+        return encoding
+```
+
+### 19.6 Engine integration
+
+The Cosilico engine pulls formulas from lawarchive at compile time:
+
+```python
+class CosilicoCompiler:
+    """Compiles rules from lawarchive into executable code."""
+
+    def compile(
+        self,
+        jurisdiction: str = "us",
+        vintage: date = None,
+        application_date: date = None,
+    ) -> CompiledRules:
+        # Fetch all formulas for this jurisdiction + temporal context
+        formulas = lawarchive.get_all_formulas(
+            jurisdiction=jurisdiction,
+            vintage=vintage or date.today(),
+            application_date=application_date or date.today(),
+        )
+
+        # Build dependency graph
+        dag = self._build_dag(formulas)
+
+        # Compile to target
+        return self._compile_dag(dag, target="python")
+```
+
+### 19.7 Storage backend
+
+Law archive uses PostgreSQL (Supabase) for production scale:
+
+```sql
+CREATE TABLE law_sections (
+    id TEXT PRIMARY KEY,              -- "federal/statute/26/32"
+    citation TEXT NOT NULL,
+    vintage DATE NOT NULL,
+    public_law TEXT,
+
+    -- Raw content
+    text TEXT,
+    subsections JSONB,
+
+    -- Application period
+    applies_from DATE,
+    applies_to DATE,
+
+    -- Encodings
+    formula_source TEXT,              -- Cosilico DSL
+    compiled_python TEXT,
+    compiled_js TEXT,
+
+    -- Provenance
+    encoded_by TEXT,
+    encoded_at TIMESTAMP,
+    verified_by JSONB,
+    test_cases JSONB,
+
+    UNIQUE(citation, vintage)
+);
+
+-- Indexes for temporal queries
+CREATE INDEX idx_law_sections_citation_vintage
+ON law_sections(citation, vintage DESC);
+
+CREATE INDEX idx_law_sections_application
+ON law_sections(applies_from, applies_to);
+
+-- Full-text search
+CREATE INDEX idx_law_sections_text_search
+ON law_sections USING GIN (
+    to_tsvector('english', COALESCE(text, ''))
+);
+```
+
+### 19.8 Implementation status
+
+| Component | Status | Repository |
+|-----------|--------|------------|
+| Raw statute ingestion | ✅ Implemented | [cosilico-lawarchive](https://github.com/CosilicoAI/cosilico-lawarchive) |
+| USLM parser | ✅ Implemented | cosilico-lawarchive |
+| SQLite storage (dev) | ✅ Implemented | cosilico-lawarchive |
+| PostgreSQL storage | ✅ Implemented | cosilico-lawarchive |
+| REST API | ✅ Implemented | cosilico-lawarchive |
+| CLI (basic) | ✅ Implemented | cosilico-lawarchive |
+| Bi-temporal model | 🔲 Planned | cosilico-lawarchive |
+| Encoding storage | 🔲 Planned | cosilico-lawarchive |
+| Pull/push/sync | 🔲 Planned | cosilico-lawarchive |
+| AI encoding pipeline | 🔲 Planned | cosilico-lawarchive |
+| Engine integration | 🔲 Planned | cosilico-engine |
+
+---
+
 ## Appendix A: Comparison with OpenFisca
 
 Based on analysis of [OpenFisca-Core](https://github.com/openfisca/openfisca-core) and [PolicyEngine-Core](https://github.com/PolicyEngine/policyengine-core) source code:
