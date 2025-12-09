@@ -2292,6 +2292,33 @@ Many policy details exist only in guidance, not in statute or regulation:
 | **Cornell LII** | Aggregator | Free legal resources | HTML | Weekly |
 | **Westlaw/LexisNexis** | Annotator | Annotated statutes | Proprietary | N/A (cost) |
 
+### 15.7.1 Existing statute APIs and why we need our own
+
+**The problem:** US law is public domain, but no open source project provides structured statute text via API with historical versions.
+
+| Service | Coverage | Open Source? | API? | Historical? | Notes |
+|---------|----------|--------------|------|-------------|-------|
+| **[OpenLaws.us](https://openlaws.us/api/)** | Federal + 50 states | ❌ No | ✅ Yes | ✅ Yes | Commercial; pricing opaque |
+| **[Free Law Project](https://github.com/freelawproject)** | Case law only | ✅ Yes | ✅ Yes | ✅ Yes | CourtListener, no statutes |
+| **[Open Law Library](https://github.com/openlawlibrary)** | Municipal codes | ✅ Yes | ⚠️ Limited | ✅ Yes | Infrastructure for govs |
+| **[uscode.house.gov](https://uscode.house.gov/download/download.shtml)** | Federal only | ✅ Public domain | ❌ Download only | ✅ Yes | Official USLM XML |
+| **[Congress.gov API](https://api.congress.gov/)** | Bills, not enacted law | ✅ Public | ✅ Yes | ✅ Yes | Legislative process only |
+| **Cornell LII** | Federal + states | ❌ No | ❌ No | ❌ No | Web scraping prohibited |
+| **LegiScan** | Bills, 50 states | ❌ No | ✅ Yes | ✅ Yes | Commercial |
+
+**Gap analysis:**
+- OpenLaws.us is closest to what we need but is proprietary
+- Free Law Project is excellent for case law but explicitly excludes statutes
+- Open Law Library helps municipalities publish, not aggregate/serve
+- Official government sources (USLM) require download + self-hosting
+
+**Why build `cosilico/lawarchive`:**
+1. **Public good** — Law should be freely accessible via API
+2. **AI training data** — We need statute text for our RL encoding pipeline
+3. **Citation verification** — Our statute-linked paths need authoritative text
+4. **Change tracking** — Detect when Congress amends sections we've encoded
+5. **Open source moat** — Others can build on our archive, creating network effects
+
 ### 15.8 Implementation phases
 
 **Phase 1: Foundation (Months 1-6)**
