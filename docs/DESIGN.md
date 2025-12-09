@@ -2734,18 +2734,39 @@ This model works well for:
 
 ## 18. Dynamics layer: behavioral responses
 
+> **Note**: The dynamics layer is **out of scope** for `cosilico-engine`. This section documents the design for an orchestration layer (e.g., `cosilico-api` or `cosilico-sim`) that consumes the rules engine.
+>
+> The rules engine is intentionally **pure**: it answers "what does the law say?" without behavioral assumptions. Dynamics, microdata, and calibration belong in a separate orchestrator.
+
 The rules engine calculates **static** impacts: "If this policy existed today, what would change?" But real policy analysis often requires **behavioral** responses: "How will people change their behavior in response to policy changes?"
 
-The dynamics layer is **separate from rules** but **consumes rules outputs**:
+The dynamics layer is **separate from rules** and lives in a different repository:
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  MICRODATA  │───▶│    RULES    │───▶│  DYNAMICS   │──┐
-│             │    │  (statute)  │    │ (behavior)  │  │
-└─────────────┘    └─────────────┘    └─────────────┘  │
-                          ▲                            │
-                          └────────────────────────────┘
-                              feedback loop
+┌─────────────────────────────────────────────────────────────┐
+│                       cosilico                              │
+│              (main Python package users install)            │
+│                                                             │
+│  - Dynamics (elasticities, take-up)                        │
+│  - Microdata loading & calibration                         │
+│  - Scenario comparison                                      │
+│  - High-level API: cosilico.simulate(reform, ...)          │
+└─────────────────────────────────────────────────────────────┘
+                          │
+            ┌─────────────┼─────────────┐
+            ▼             ▼             ▼
+     ┌───────────┐ ┌───────────┐ ┌───────────┐
+     │cosilico-us│ │cosilico-uk│ │cosilico-ca│
+     │  (rules)  │ │  (rules)  │ │  (rules)  │
+     └───────────┘ └───────────┘ └───────────┘
+            │             │             │
+            └─────────────┼─────────────┘
+                          ▼
+                  ┌───────────────┐
+                  │cosilico-engine│
+                  │ (DSL, parser, │
+                  │   executor)   │
+                  └───────────────┘
 ```
 
 ### 18.1 Why dynamics is separate from rules
@@ -3071,13 +3092,13 @@ For novel policies, we:
 3. Flag high uncertainty explicitly
 4. Report bounds rather than point estimates
 
-### 18.7 Directory structure
+### 18.7 Repository structure
+
+The dynamics layer lives in the main `cosilico` package, separate from the engine and rules:
 
 ```
-cosilico-engine/
-├── statute/              # Rules (law-linked)
-│   └── 26/32/...
-├── dynamics/             # Behavioral parameters (research-linked)
+cosilico/                    # Main package (pip install cosilico)
+├── dynamics/                # Behavioral parameters (research-linked)
 │   ├── labor_supply/
 │   │   ├── intensive.yaml
 │   │   └── extensive.yaml
@@ -3089,16 +3110,25 @@ cosilico-engine/
 │   │   └── medicaid.yaml
 │   └── macro/
 │       └── wage_feedback.yaml
-├── microdata/            # Survey → statute mappings
+├── microdata/               # Survey → statute mappings
 │   ├── cps/
 │   │   └── mapping.yaml
 │   └── calibration/
 │       └── targets.yaml
 └── src/
     └── cosilico/
+        ├── simulation.py    # High-level API
+        └── dynamics.py      # Behavioral executor
+
+cosilico-engine/             # DSL engine (this repo)
+└── src/
+    └── cosilico/
         ├── dsl_parser.py
-        ├── vectorized_executor.py
-        └── dynamics_executor.py
+        └── vectorized_executor.py
+
+cosilico-us/                 # US rules (pure law)
+└── statute/
+    └── 26/32/...
 ```
 
 ### 18.8 Integration with microdata calibration
