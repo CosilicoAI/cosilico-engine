@@ -223,16 +223,32 @@ def run_microsim(
     if variables is None:
         variables = ["adjusted_gross_income"]
 
-    # Load DSL code for each variable
-    statute_dir = Path(__file__).parents[2] / "statute"
+    # Load DSL code from cosilico-us (country-specific statutes)
+    # NOT from cosilico-engine/statute (which should only have test fixtures)
+    statute_candidates = [
+        Path(__file__).parents[4] / "cosilico-us",  # From cosilico-engine/src/cosilico/
+        Path.home() / "CosilicoAI" / "cosilico-us",
+    ]
+    statute_dir = None
+    for p in statute_candidates:
+        if p.exists():
+            statute_dir = p
+            break
+
+    if statute_dir is None:
+        raise FileNotFoundError(
+            f"Could not find cosilico-us statute repo. Tried: {statute_candidates}\n"
+            "Statute files must be in cosilico-us, NOT cosilico-engine."
+        )
+
     dsl_code = ""
 
-    # For now, use AGI formula
+    # Load AGI formula from cosilico-us
     agi_path = statute_dir / "26" / "62" / "a" / "adjusted_gross_income.cosilico"
     if agi_path.exists():
         dsl_code = agi_path.read_text()
     else:
-        # Inline simplified formula
+        # Inline simplified formula as fallback
         dsl_code = """
         variable adjusted_gross_income {
             entity Person
