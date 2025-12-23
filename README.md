@@ -202,6 +202,41 @@ cosilico compile --jurisdictions us,us.ca --variables income_tax,ca_eitc
 
 Apache 2.0 - Use freely in commercial and open-source projects.
 
+## Validation Strategy
+
+Cosilico uses a two-phase validation approach:
+
+### Phase 1: Reference Validation (Once per Variable)
+Each variable is validated against PolicyEngine (the reference implementation) to ensure correctness:
+```bash
+# Validate EITC against PolicyEngine-US
+cosilico validate eitc --reference policyengine-us --cases 1000
+```
+
+This runs test cases through both Cosilico (Python target) and PolicyEngine, flagging any discrepancies.
+
+### Phase 2: Cross-Compilation Consistency (Continuous)
+Once validated against the reference, we ensure ALL compilation targets produce **identical results**:
+
+```
+    DSL Source
+        │
+        ├──► Python  ──┐
+        ├──► JS      ──┼──► Must all produce identical output
+        ├──► WASM    ──┤    for the same inputs
+        └──► SQL     ──┘
+```
+
+Tests in `tests/test_cross_compilation.py` verify this property:
+- Same inputs → same outputs across all targets
+- Floating point precision handled consistently
+- Edge cases (zero, negative, boolean) match exactly
+
+This strategy means:
+1. **Bug fixes are validated once** against PolicyEngine
+2. **New targets automatically inherit correctness** - just prove they match existing targets
+3. **CI is fast** - cross-compilation tests don't require PolicyEngine
+
 ## Status
 
 🚧 **Early Development** - Not yet ready for production use.
