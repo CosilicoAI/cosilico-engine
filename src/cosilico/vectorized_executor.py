@@ -539,9 +539,10 @@ class VectorizedExecutor:
 
     def __init__(
         self,
-        parameters: dict[str, Any],
+        parameters: Optional[dict[str, Any]] = None,
         n_workers: int = 1,
         use_numba: bool = False,
+        dependency_resolver: Optional[Any] = None,
     ):
         """Initialize with parameter values.
 
@@ -549,10 +550,12 @@ class VectorizedExecutor:
             parameters: Dict of parameter paths to values
             n_workers: Number of parallel workers (1 = sequential)
             use_numba: Whether to JIT compile hot paths with Numba
+            dependency_resolver: Optional DependencyResolver for cross-file refs
         """
-        self.parameters = parameters
+        self.parameters = parameters or {}
         self.n_workers = n_workers
         self.use_numba = use_numba
+        self.dependency_resolver = dependency_resolver
         self._compiled_formulas: dict[str, Callable] = {}
 
     def execute(
@@ -616,6 +619,62 @@ class VectorizedExecutor:
                 scenario.cache_result(var_name, value)
 
         return results
+
+    def execute_with_dependencies(
+        self,
+        entry_point: str,
+        inputs: dict[str, np.ndarray],
+        entity_index: Optional[EntityIndex] = None,
+        output_variables: Optional[list[str]] = None,
+    ) -> dict[str, np.ndarray]:
+        """Execute DSL code with cross-file dependency resolution.
+
+        Args:
+            entry_point: Statute path to entry point (e.g. "statute/26/32/a/1/eitc")
+            inputs: Dict of variable name -> array of values
+            entity_index: Entity relationship mappings
+            output_variables: Variables to compute (default: all from entry point)
+
+        Returns:
+            Dict of variable name -> computed array
+        """
+        if not self.dependency_resolver:
+            raise ValueError("No dependency_resolver configured")
+
+        # Resolve all dependencies
+        resolved_modules = self.dependency_resolver.resolve_all(entry_point)
+
+        # Build combined context with all inputs
+        all_computed: dict[str, np.ndarray] = dict(inputs)
+
+        # Execute modules in dependency order
+        for resolved in resolved_modules:
+            if resolved.module is None:
+                continue  # Skip placeholders (unresolvable refs)
+
+            # Build variable lookup
+            variables = {var.name: var for var in resolved.module.variables}
+
+            # Create execution context
+            ctx = VectorizedContext(
+                inputs=all_computed,  # Include previously computed values
+                parameters=self.parameters,
+                variables=variables,
+                entity_index=entity_index,
+                references=resolved.module.references,
+            )
+
+            # Execute all formulas in this module
+            for var in resolved.module.variables:
+                if var.formula:
+                    value = evaluate_formula_vectorized(var.formula, ctx)
+                    ctx.computed[var.name] = value
+                    all_computed[var.name] = value
+
+        # Return requested output variables
+        if output_variables:
+            return {k: all_computed[k] for k in output_variables if k in all_computed}
+        return all_computed
 
     def _build_dependency_graph(self, module: Module) -> DependencyGraph:
         """Build dependency graph from parsed module."""

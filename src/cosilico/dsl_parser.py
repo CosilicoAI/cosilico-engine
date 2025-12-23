@@ -780,7 +780,7 @@ class Parser:
 
         return FormulaBlock(bindings=bindings, return_expr=return_expr)
 
-    def _try_parse_if_guard(self) -> tuple | None:
+    def _try_parse_if_guard(self) -> Optional[tuple]:
         """Try to parse an if-guard statement: if <cond> then return <expr>
 
         Returns (condition, return_value) tuple if successful, None if this is
