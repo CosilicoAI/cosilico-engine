@@ -1,0 +1,50 @@
+# 26 USC Section 24(b)(2) - Phase-Out of Credit
+#
+# "(A) In general.--The credit allowed under subsection (a) (determined
+# after the application of paragraph (1)) shall be reduced (but not below
+# zero) by $50 for each $1,000 (or fraction thereof) by which the
+# taxpayer's modified adjusted gross income exceeds the threshold amount."
+#
+# "(B) Threshold amount.--For purposes of subparagraph (A), the term
+# 'threshold amount' means--
+#   (i) $400,000 in the case of a joint return, and
+#   (ii) $200,000 in any other case."
+#
+# Note: The phase-out is calculated as 5% of income over threshold,
+# rounded up to the nearest $50 (i.e., per $1,000 increment).
+
+module statute.26.24.d.1
+version "2024.1"
+
+references {
+  # Modified AGI (for CTC, this equals AGI per Section 24(b)(1))
+  adjusted_gross_income: statute/26/62/a/adjusted_gross_income
+  filing_status: statute/26/1/filing_status
+
+  # Phase-out parameters from Section 24(b)(2)
+  phase_out_threshold: statute/26/24/b/1/phase_out_threshold
+  phase_out_rate: statute/26/24/b/1/phase_out_rate
+}
+
+variable ctc_phase_out_amount {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  label "CTC Phase-Out Reduction"
+  description "Reduction in CTC due to income exceeding threshold per 26 USC 24(b)(2)"
+
+  formula {
+    # Get threshold based on filing status
+    let threshold = phase_out_threshold[filing_status]
+
+    # Calculate income over threshold
+    let excess_income = max(0, adjusted_gross_income - threshold)
+
+    # Round up to nearest $1,000 for phase-out calculation
+    # $50 reduction per $1,000 = 5% rate
+    let thousands_over = ceiling(excess_income / 1000)
+
+    return thousands_over * 50
+  }
+}

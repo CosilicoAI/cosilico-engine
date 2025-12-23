@@ -1,0 +1,111 @@
+# 26 USC Section 24(b)(1) - Credit Amount and Thresholds
+#
+# "(1) In general.--The amount of the credit allowable under subsection (a)
+# for any taxable year shall not exceed $2,000 for each qualifying child."
+#
+# Phase-out per Section 24(b)(2):
+# "The credit allowed under subsection (a) (determined after the application
+# of paragraph (1)) shall be reduced (but not below zero) by $50 for each
+# $1,000 (or fraction thereof) by which the taxpayer's modified adjusted
+# gross income exceeds the threshold amount."
+#
+# Threshold amounts per Section 24(b)(2)(B):
+# - $400,000 in the case of a joint return
+# - $200,000 in any other case
+
+credit_per_child:
+  description: Maximum credit amount per qualifying child under age 17
+  unit: USD
+  reference: "26 USC 24(b)(1)"
+  indexed_by: []
+
+  values:
+    - effective_from: 2018-01-01
+      source: "26 USC 24(b)(1), as amended by TCJA P.L. 115-97"
+      value: 2000
+
+    - effective_from: 2017-01-01
+      effective_to: 2017-12-31
+      source: "26 USC 24(a) (pre-TCJA)"
+      value: 1000
+
+refundable_max:
+  description: Maximum refundable portion (Additional Child Tax Credit) per child
+  unit: USD
+  reference: "26 USC 24(h)(5)"
+  inflation_adjustment: "24(h)(5)(B)"
+
+  values:
+    - effective_from: 2024-01-01
+      source: "Rev. Proc. 2023-34, Section 3.09"
+      value: 1700
+
+    - effective_from: 2023-01-01
+      effective_to: 2023-12-31
+      source: "Rev. Proc. 2022-38"
+      value: 1600
+
+    - effective_from: 2022-01-01
+      effective_to: 2022-12-31
+      source: "Rev. Proc. 2021-45"
+      value: 1500
+
+    - effective_from: 2018-01-01
+      effective_to: 2021-12-31
+      source: "26 USC 24(h)(5)(A) (pre-ARPA)"
+      value: 1400
+
+phase_out_threshold:
+  description: Income threshold where CTC phase-out begins
+  unit: USD
+  reference: "26 USC 24(b)(2)(B)"
+  indexed_by: [filing_status]
+
+  values:
+    - effective_from: 2018-01-01
+      source: "26 USC 24(b)(2)(B), as amended by TCJA"
+      by_filing_status:
+        SINGLE: 200000
+        HEAD_OF_HOUSEHOLD: 200000
+        JOINT: 400000
+        SEPARATE: 200000
+
+phase_out_rate:
+  description: CTC reduction rate per dollar over threshold ($50 per $1,000 = 5%)
+  unit: rate
+  reference: "26 USC 24(b)(2)(A)"
+
+  values:
+    - effective_from: 2018-01-01
+      source: "26 USC 24(b)(2)(A)"
+      value: 0.05
+
+earned_income_threshold:
+  description: Earned income threshold for Additional CTC calculation
+  unit: USD
+  reference: "26 USC 24(h)(5)(A)(i)"
+
+  values:
+    - effective_from: 2018-01-01
+      source: "26 USC 24(h)(5)(A)"
+      value: 2500
+
+earned_income_rate:
+  description: Rate of earned income above threshold for ACTC (15%)
+  unit: rate
+  reference: "26 USC 24(h)(5)(A)(i)"
+
+  values:
+    - effective_from: 2018-01-01
+      source: "26 USC 24(h)(5)(A)(i)"
+      value: 0.15
+
+qualifying_child_age:
+  description: Maximum age for a child to qualify for CTC (under 17)
+  unit: years
+  reference: "26 USC 24(c)(1)"
+
+  values:
+    - effective_from: 2018-01-01
+      source: "26 USC 24(c)(1)"
+      value: 17

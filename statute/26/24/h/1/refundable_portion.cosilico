@@ -1,0 +1,62 @@
+# 26 USC Section 24(h)(5) - Additional Child Tax Credit (Refundable Portion)
+#
+# "(A) In general.--The amount determined under subparagraph (B) shall be
+# equal to the lesser of--
+#   (i) 15 percent of so much of the taxpayer's earned income (within the
+#       meaning of section 32) for the taxable year as exceeds $2,500, or
+#   (ii) the amount equal to--
+#        (I) the per child amount under paragraph (1) multiplied by
+#        (II) the number of qualifying children of the taxpayer.
+#
+# The TCJA cap per Section 24(h)(5)(B) limits the refundable amount to
+# $1,400-$1,700 per child (inflation-adjusted).
+
+module statute.26.24.h.1
+version "2024.1"
+
+references {
+  # Credit amounts and limitations
+  child_tax_credit_before_limit: statute/26/24/a/1/child_tax_credit_before_limit
+  child_tax_credit: statute/26/24/a/1/child_tax_credit
+  num_ctc_qualifying_children: statute/26/24/i/1/num_ctc_qualifying_children
+
+  # Earned income definition from Section 32(c)(2)
+  earned_income: statute/26/32/c/2/A/earned_income
+
+  # Parameters from Section 24(h)(5)
+  refundable_max: statute/26/24/b/1/refundable_max
+  earned_income_threshold: statute/26/24/b/1/earned_income_threshold
+  earned_income_rate: statute/26/24/b/1/earned_income_rate
+}
+
+variable additional_child_tax_credit {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  label "Additional Child Tax Credit (ACTC)"
+  description "Refundable portion of Child Tax Credit per 26 USC 24(h)(5)"
+
+  formula {
+    # ACTC only available if CTC exceeds tax liability
+    # (i.e., there's unused credit after applying to tax)
+    let unused_ctc = child_tax_credit_before_limit - child_tax_credit
+
+    if unused_ctc <= 0 then
+      return 0
+
+    # Calculate earned income component per Section 24(h)(5)(A)(i)
+    # 15% of earned income exceeding $2,500
+    let earned_income_excess = max(0, earned_income - earned_income_threshold)
+    let earned_income_amount = earned_income_rate * earned_income_excess
+
+    # Calculate the maximum refundable amount per child per Section 24(h)(5)(B)
+    let max_refundable = num_ctc_qualifying_children * refundable_max
+
+    # ACTC is the lesser of:
+    # 1. Unused CTC (credit that exceeds tax liability)
+    # 2. 15% of earned income over $2,500
+    # 3. Maximum refundable amount ($1,700 per child in 2024)
+    return min(unused_ctc, min(earned_income_amount, max_refundable))
+  }
+}

@@ -1,0 +1,86 @@
+# 26 USC Section 24(a) - Child Tax Credit
+#
+# "(a) Allowance of credit.--There shall be allowed as a credit against
+# the tax imposed by this chapter for the taxable year with respect to
+# each qualifying child of the taxpayer for which the taxpayer is allowed
+# a deduction under section 151 an amount equal to $1,000."
+#
+# As amended by TCJA (P.L. 115-97), the credit is $2,000 per qualifying
+# child for tax years 2018-2025.
+#
+# Section 24(d)(1) limits the nonrefundable portion:
+# "The credit allowed under subsection (a) shall not exceed the excess
+# (if any) of--
+#   (A) the sum of the regular tax liability... plus any tax imposed by
+#       section 55 (relating to alternative minimum tax), over
+#   (B) the sum of the credits allowable under this subpart (other than
+#       this section and sections 23 and 25D)."
+
+module statute.26.24.a.1
+version "2024.1"
+
+references {
+  # Qualifying children count from Section 24(c)
+  num_ctc_qualifying_children: statute/26/24/i/1/num_ctc_qualifying_children
+
+  # Credit amount parameter from Section 24(b)(1)
+  credit_per_child: statute/26/24/b/1/credit_per_child
+
+  # Phase-out reduction from Section 24(b)(2)
+  ctc_phase_out_amount: statute/26/24/d/1/ctc_phase_out_amount
+
+  # Tax liability limitation from Section 24(d)
+  tax_liability: statute/26/1/tax_liability
+  nonrefundable_credits: statute/26/credits/nonrefundable_credits
+
+  # Refundable portion (ACTC) from Section 24(h)
+  additional_child_tax_credit: statute/26/24/h/1/additional_child_tax_credit
+}
+
+variable child_tax_credit_before_limit {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  label "CTC Before Tax Liability Limit"
+  description "Child Tax Credit after phase-out but before tax liability limitation per 26 USC 24(a)"
+
+  formula {
+    # Calculate base credit: $2,000 per qualifying child
+    let base_credit = num_ctc_qualifying_children * credit_per_child
+
+    # Apply phase-out reduction per Section 24(b)(2)
+    return max(0, base_credit - ctc_phase_out_amount)
+  }
+}
+
+variable child_tax_credit {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  label "Child Tax Credit (Nonrefundable)"
+  description "Nonrefundable Child Tax Credit limited to tax liability per 26 USC 24(d)(1)"
+
+  formula {
+    # Credit is limited to tax liability minus other nonrefundable credits
+    # per Section 24(d)(1)
+    let available_tax_liability = max(0, tax_liability - nonrefundable_credits)
+
+    # Nonrefundable portion cannot exceed available tax liability
+    return min(child_tax_credit_before_limit, available_tax_liability)
+  }
+}
+
+variable total_child_tax_credit {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  label "Total Child Tax Credit (Refundable + Nonrefundable)"
+  description "Combined Child Tax Credit including refundable ACTC per 26 USC 24"
+
+  formula {
+    return child_tax_credit + additional_child_tax_credit
+  }
+}
