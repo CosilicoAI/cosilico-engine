@@ -7,7 +7,7 @@ This is a recursive descent parser that produces an AST.
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 
 class TokenType(Enum):
@@ -206,10 +206,10 @@ class Identifier:
     name: str
 
 
-Expression = (
-    LetBinding | VariableRef | ParameterRef | BinaryOp | UnaryOp |
-    FunctionCall | IfExpr | MatchExpr | Literal | Identifier
-)
+Expression = Union[
+    'LetBinding', 'VariableRef', 'ParameterRef', 'BinaryOp', 'UnaryOp',
+    'FunctionCall', 'IfExpr', 'MatchExpr', 'Literal', 'Identifier'
+]
 
 
 @dataclass
