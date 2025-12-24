@@ -24,6 +24,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "policyengine-us>=1.470.1",
     "pyyaml>=6.0.3",
 ]
 
