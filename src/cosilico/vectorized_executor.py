@@ -433,11 +433,17 @@ def _call_builtin_vectorized(
     if func_name == "min":
         if len(evaluated_args) == 1:
             return evaluated_args[0]  # Single arg, return as-is
+        # Handle mixed scalar/array args by broadcasting
+        if len(evaluated_args) == 2:
+            return np.minimum(evaluated_args[0], evaluated_args[1])
         return np.minimum.reduce(evaluated_args)
 
     if func_name == "max":
         if len(evaluated_args) == 1:
             return evaluated_args[0]
+        # Handle mixed scalar/array args by broadcasting
+        if len(evaluated_args) == 2:
+            return np.maximum(evaluated_args[0], evaluated_args[1])
         return np.maximum.reduce(evaluated_args)
 
     if func_name == "abs":
