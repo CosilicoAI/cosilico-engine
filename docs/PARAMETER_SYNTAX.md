@@ -2,36 +2,72 @@
 
 ## Overview
 
-Cosilico uses YAML files for parameter declarations, separate from the DSL formulas.
-This allows parameters to be updated independently of code, enables reform modeling,
-and provides a clear audit trail for policy values.
+Cosilico uses YAML files for parameter declarations, separate from DSL formulas.
+Parameters are stored at paths that mirror the statute structure - the file path
+itself serves as the citation (no separate `reference` field needed).
+
+Key features:
+- **Separation of Concerns**: Policy values separate from calculation logic
+- **Auto-Resolution**: Index variables can be automatically looked up
+- **Reform Modeling**: Easy to create policy variants by overriding parameters
+- **Time Travel**: Built-in support for historical and future values
 
 ## Parameter Patterns
 
 ### 1. Simple Time-Varying Parameters
 
 ```yaml
-# parameters/irs/payroll/social_security/cap.yaml
-description: Social Security wage base
-unit: currency-USD
-period: year
+# statute/26/3101/b/1/rate.yaml
+# Path IS the reference: 26 USC § 3101(b)(1)
+
+description: Medicare tax rate
+unit: /1
+
 values:
-  2024-01-01: 168_600
-  2023-01-01: 160_200
-  2022-01-01: 147_000
-reference:
-  - title: Rev. Proc. 2023-34
-    href: https://www.irs.gov/pub/irs-drop/rp-23-34.pdf
+  1986-01-01: 0.0145
 ```
 
-### 2. Parameters Varying by Filing Status
+### 2. Parameters with Numeric Index (Brackets)
 
-For parameters that differ by filing status, use top-level keys:
+For parameters indexed by a numeric dimension (children, income), specify the
+full path to the indexing variable:
 
 ```yaml
-# parameters/irs/niit/threshold.yaml
-description: Net Investment Income Tax modified AGI threshold
+# statute/26/32/b/1/A/credit_percentage.yaml
+
+description: EITC credit percentage by qualifying children
+unit: /1
+index: statute/26/32/c/1/num_qualifying_children
+
+brackets:
+  - threshold: 0
+    values:
+      1975-01-01: 0.0765
+  - threshold: 1
+    values:
+      1975-01-01: 0.34
+  - threshold: 2
+    values:
+      1975-01-01: 0.40
+  - threshold: 3
+    values:
+      1975-01-01: 0.45
+```
+
+The `index` field specifies the full path to the variable used for bracket lookup.
+This enables **auto-resolution** - the executor can look up the index variable
+automatically without it being passed explicitly.
+
+### 3. Parameters Varying by Filing Status
+
+For parameters that differ by filing status:
+
+```yaml
+# statute/26/1411/a/1/threshold.yaml
+
+description: Net Investment Income Tax threshold
 unit: currency-USD
+index: statute/26/1/filing_status
 
 SINGLE:
   values:
@@ -48,54 +84,20 @@ SEPARATE:
 SURVIVING_SPOUSE:
   values:
     2013-01-01: 250_000
-
-reference:
-  - title: 26 USC § 1411
-    href: https://www.law.cornell.edu/uscode/text/26/1411
-```
-
-### 3. Bracket/Scale Parameters
-
-For parameters indexed by a numeric dimension (children, income):
-
-```yaml
-# parameters/irs/credits/eitc/max.yaml
-description: EITC maximum credit amount by number of children
-unit: currency-USD
-index: num_children
-
-brackets:
-  - threshold: 0
-    values:
-      2024-01-01: 632
-      2023-01-01: 600
-  - threshold: 1
-    values:
-      2024-01-01: 4_213
-      2023-01-01: 3_995
-  - threshold: 2
-    values:
-      2024-01-01: 6_960
-      2023-01-01: 6_604
-  - threshold: 3
-    values:
-      2024-01-01: 7_830
-      2023-01-01: 7_430
-
-reference:
-  - title: Rev. Proc. 2023-34
-    href: https://www.irs.gov/pub/irs-drop/rp-23-34.pdf#page=10
 ```
 
 ### 4. Combined: Filing Status + Brackets
 
-When both dimensions are needed:
+When both dimensions are needed, list both index paths:
 
 ```yaml
-# parameters/irs/credits/eitc/phase_out_start.yaml
+# statute/26/32/b/2/A/phase_out_start.yaml
+
 description: EITC phase-out start threshold
 unit: currency-USD
-index: num_children
+index:
+  - statute/26/1/filing_status
+  - statute/26/32/c/1/num_qualifying_children
 
 SINGLE:
   brackets:
@@ -118,66 +120,87 @@ JOINT:
 
 ## DSL Reference Syntax
 
-### Simple Parameter Access
+### Auto-Resolution (Recommended)
+
+When the parameter specifies its index path, no argument needed:
 
 ```cosilico
-# In formula block:
-let wage_base = parameter("irs.payroll.social_security.cap")
+# Executor automatically looks up statute/26/32/c/1/num_qualifying_children
+let rate = parameter("statute/26/32/b/1/A/credit_percentage")
 ```
 
-### Filing Status Lookup
+### Explicit Index (For Clarity or Reuse)
+
+You can still pass the index explicitly:
 
 ```cosilico
-# Automatic lookup based on tax unit's filing_status
-let threshold = parameter("irs.niit.threshold", filing_status)
-```
-
-### Bracket Lookup
-
-```cosilico
-# Lookup by numeric index
-let max_credit = parameter("irs.credits.eitc.max", num_children)
+# Explicit - useful for clarity or when reusing parameter in different context
+let rate = parameter("statute/26/32/b/1/A/credit_percentage", num_qualifying_children)
 ```
 
 ### Combined Lookup
 
+For multi-dimensional parameters:
+
 ```cosilico
-# Both filing status and index
-let phase_out_start = parameter(
-  "irs.credits.eitc.phase_out_start",
+# Auto-resolves both filing_status and num_qualifying_children
+let threshold = parameter("statute/26/32/b/2/A/phase_out_start")
+
+# Or explicit
+let threshold = parameter(
+  "statute/26/32/b/2/A/phase_out_start",
   filing_status,
-  num_children
+  num_qualifying_children
 )
 ```
 
 ## Parameter Resolution
 
-1. **Path Resolution**: `irs.payroll.social_security.cap` maps to
-   `parameters/irs/payroll/social_security/cap.yaml`
+1. **Path Resolution**: `statute/26/32/b/1/A/credit_percentage` maps to
+   `statute/26/32/b/1/A/credit_percentage.yaml`
 
 2. **Time Resolution**: The executor uses the simulation period to select
-   the appropriate value from the `values` block
+   the appropriate value from the `values` block (finds most recent <= period)
 
-3. **Filing Status Resolution**: If a filing status key is provided, lookup
-   uses that key; otherwise uses the tax unit's filing status
+3. **Index Auto-Resolution**: If parameter has `index` field and no index
+   argument passed, executor looks up the variable at that path
 
-4. **Bracket Resolution**: For bracket parameters, finds the appropriate
-   bracket based on the index value (typically uses <= comparison)
+4. **Bracket Resolution**: For bracket parameters, finds the bracket where
+   threshold <= index value (uses highest matching threshold)
 
 ## Metadata Fields
 
-| Field | Description |
-|-------|-------------|
-| `description` | Human-readable description of the parameter |
-| `unit` | Data type: `currency-USD`, `/1` (rate), `year`, `child`, etc. |
-| `period` | Time period: `year`, `month`, etc. |
-| `reference` | Array of {title, href} citations to authoritative sources |
-| `index` | For brackets: name of the indexing dimension |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `description` | Yes | Human-readable description |
+| `unit` | Yes | Data type: `currency-USD`, `/1` (rate), `year`, etc. |
+| `index` | No | Path(s) to indexing variable(s) for auto-resolution |
+| `values` | * | Date -> value mapping (for simple parameters) |
+| `brackets` | * | Array of {threshold, values} (for indexed parameters) |
 
-## Benefits
+\* One of `values` or `brackets` (or filing status keys containing these) required.
 
-1. **Separation of Concerns**: Policy values separate from calculation logic
-2. **Reform Modeling**: Easy to create policy variants by overriding parameters
-3. **Auditability**: Clear citations to authoritative sources
-4. **Time Travel**: Built-in support for historical and future values
-5. **Validation**: YAML schema can enforce structure and types
+## File Organization
+
+Parameters live alongside their statute encodings:
+
+```
+cosilico-us/
+  statute/
+    26/                           # Title 26 - IRC
+      32/                         # § 32 - EITC
+        b/
+          1/
+            A/
+              credit_percentage.yaml
+              formula.cosilico
+          2/
+            A/
+              phase_out_start.yaml
+      1411/                       # § 1411 - NIIT
+        a/
+          1/
+            threshold.yaml
+```
+
+The file path serves as the legal citation - no redundant `reference` field needed.

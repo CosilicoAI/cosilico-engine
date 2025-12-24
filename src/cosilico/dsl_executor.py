@@ -14,8 +14,7 @@ from .dsl_parser import (
     ReferencesBlock, StatuteReference,
     UnaryOp, VariableDef, VariableRef, parse_dsl,
 )
-from .parameters.loader import load_parameters
-from .parameters.schema import ParameterStore as YAMLParameterStore
+from .parameters.loader import load_parameters, ParameterStore as NewParameterStore
 from .types import ExecutionResult, GeneratedCode, TestCase
 
 
@@ -346,13 +345,18 @@ class DSLExecutor:
                         }
                     }
                 }
-            rules_dir: Directory containing YAML parameter files (default: rules/)
+            rules_dir: Directory containing YAML parameter files.
+                       If None, tries to load from cosilico-us.
             use_yaml_params: If True, load parameters from YAML files
         """
         yaml_store = None
         if use_yaml_params:
             try:
-                yaml_store = load_parameters(rules_dir)
+                if rules_dir:
+                    yaml_store = load_parameters(rules_dir)
+                else:
+                    # Try cosilico-us first
+                    yaml_store = load_cosilico_us_parameters()
             except Exception as e:
                 print(f"Warning: Could not load YAML parameters: {e}")
 
@@ -499,6 +503,31 @@ class DSLExecutor:
             return abs(out_val - exp_val) <= tolerance
 
         return out_val == exp_val
+
+
+def get_cosilico_us_path() -> Optional[Path]:
+    """Find cosilico-us directory relative to this package."""
+    # Try common locations
+    candidates = [
+        Path.home() / "CosilicoAI" / "cosilico-us",
+        Path(__file__).parent.parent.parent.parent / "cosilico-us",
+        Path.cwd().parent / "cosilico-us",
+    ]
+    for path in candidates:
+        if path.exists() and (path / "statute").exists():
+            return path
+    return None
+
+
+def load_cosilico_us_parameters() -> Optional[NewParameterStore]:
+    """Load parameters from cosilico-us repository statute/ directory."""
+    us_path = get_cosilico_us_path()
+    if us_path:
+        # Only load from statute/ to avoid .venv and other dirs
+        statute_path = us_path / "statute"
+        if statute_path.exists():
+            return load_parameters(statute_path)
+    return None
 
 
 def get_default_parameters() -> dict:
