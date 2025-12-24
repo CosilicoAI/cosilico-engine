@@ -23,6 +23,7 @@ from src.cosilico.dsl_parser import (
     # Expression types
     Literal,
     Identifier,
+    IndexExpr,
     BinaryOp,
     UnaryOp,
     IfExpr,
@@ -496,9 +497,12 @@ variable credit {
         module = parse_dsl(code)
         var = module.variables[0]
         binding = var.formula.bindings[0]
-        assert isinstance(binding.value, ParameterRef)
-        assert binding.value.path == "credit_rate"
-        assert binding.value.index == "n_children"
+        # IndexExpr with Identifier base and index
+        assert isinstance(binding.value, IndexExpr)
+        assert isinstance(binding.value.base, Identifier)
+        assert binding.value.base.name == "credit_rate"
+        assert isinstance(binding.value.index, Identifier)
+        assert binding.value.index.name == "n_children"
 
     def test_formula_with_if_statement_early_return(self):
         """Parse formula with if statement and early return.

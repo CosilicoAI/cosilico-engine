@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from .dsl_parser import (
-    BinaryOp, Expression, FormulaBlock, FunctionCall, Identifier,
+    BinaryOp, Expression, FormulaBlock, FunctionCall, Identifier, IndexExpr,
     IfExpr, LetBinding, Literal, MatchExpr, Module, ParameterRef,
     ReferencesBlock, UnaryOp, VariableDef, VariableRef, parse_dsl,
 )
@@ -248,6 +248,27 @@ def evaluate_expression_vectorized(expr: Expression, ctx: VectorizedContext) -> 
 
     if isinstance(expr, ParameterRef):
         return ctx.get_parameter(expr.path, expr.index)
+
+    if isinstance(expr, IndexExpr):
+        # Evaluate base and index, then perform lookup
+        # Base could be a dict (parameter table) or array
+        base_value = evaluate_expression_vectorized(expr.base, ctx)
+        index_value = evaluate_expression_vectorized(expr.index, ctx)
+
+        # If base is scalar/array and we have index values, do vectorized lookup
+        if isinstance(base_value, dict):
+            # Dict lookup: base_value[index_value] for each element
+            result = np.zeros_like(index_value, dtype=float)
+            for k, v in base_value.items():
+                mask = index_value == k
+                result[mask] = v
+            return result
+        elif isinstance(base_value, np.ndarray) and base_value.ndim > 0:
+            # Array indexing
+            return base_value[index_value.astype(int)]
+        else:
+            # Scalar base - return as-is (unusual case)
+            return base_value
 
     if isinstance(expr, BinaryOp):
         left = evaluate_expression_vectorized(expr.left, ctx)
@@ -666,6 +687,9 @@ class VectorizedExecutor:
 
             # Execute all formulas in this module
             for var in resolved.module.variables:
+                # Skip if already provided as input (inputs take precedence)
+                if var.name in all_computed:
+                    continue
                 if var.formula:
                     value = evaluate_formula_vectorized(var.formula, ctx)
                     ctx.computed[var.name] = value

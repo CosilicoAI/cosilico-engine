@@ -206,9 +206,19 @@ class Identifier:
     name: str
 
 
+@dataclass
+class IndexExpr:
+    """Subscript/index expression: base[index]
+
+    Used for parameter lookups like credit_percentage[num_qualifying_children]
+    """
+    base: "Expression"
+    index: "Expression"
+
+
 Expression = Union[
     'LetBinding', 'VariableRef', 'ParameterRef', 'BinaryOp', 'UnaryOp',
-    'FunctionCall', 'IfExpr', 'MatchExpr', 'Literal', 'Identifier'
+    'FunctionCall', 'IfExpr', 'MatchExpr', 'Literal', 'Identifier', 'IndexExpr'
 ]
 
 
@@ -935,15 +945,13 @@ class Parser:
                 if self._check(TokenType.LPAREN):
                     return self._parse_function_call(name)
 
-            # Check for indexing
+            # Check for indexing: base[index]
             if self._check(TokenType.LBRACKET):
                 self._advance()
                 index = self._parse_expression()
                 self._consume(TokenType.RBRACKET, "Expected ']'")
-
-                if isinstance(index, Identifier):
-                    return ParameterRef(path=name, index=index.name)
-                return ParameterRef(path=name, index=str(index))
+                # Return IndexExpr so base is evaluated as variable/expression first
+                return IndexExpr(base=Identifier(name=name), index=index)
 
             return Identifier(name=name)
 
