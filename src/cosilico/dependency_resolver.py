@@ -35,10 +35,10 @@ def extract_dependencies(module: Module) -> list[str]:
     Returns:
         List of statute paths referenced by this module
     """
-    if not module.references:
+    if not module.imports:
         return []
 
-    return [ref.statute_path for ref in module.references.references]
+    return [ref.statute_path for ref in module.imports.references]
 
 
 @dataclass

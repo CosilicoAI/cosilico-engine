@@ -86,7 +86,7 @@ class JSGenerator:
 
         # Generate each variable as a function
         for var in module.variables:
-            lines.append(self._generate_variable(var, module.references))
+            lines.append(self._generate_variable(var, module.imports))
             lines.append("")
 
         # Export all variables
@@ -108,8 +108,6 @@ class JSGenerator:
                 lines.append(f" * {var.label}")
             if var.description:
                 lines.append(f" * {var.description}")
-            if var.reference:
-                lines.append(f" * @see {var.reference}")
             lines.append(" */")
 
         # Function signature

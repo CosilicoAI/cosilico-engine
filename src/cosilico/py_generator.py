@@ -87,7 +87,7 @@ class PyGenerator:
 
         # Generate each variable as a function
         for var in module.variables:
-            lines.append(self._generate_variable(var, module.references))
+            lines.append(self._generate_variable(var, module.imports))
             lines.append("")
 
         return "\n".join(lines)
@@ -106,8 +106,6 @@ class PyGenerator:
                 lines.append(f"{self.indent}{var.label}")
             if var.description:
                 lines.append(f"{self.indent}{var.description}")
-            if var.reference:
-                lines.append(f"{self.indent}Reference: {var.reference}")
             lines.append(f'{self.indent}"""')
         else:
             lines.append(f"def {var.name}(inputs, params):")

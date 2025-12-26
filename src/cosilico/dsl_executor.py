@@ -426,7 +426,7 @@ class DSLExecutor:
                 parameters=self.parameter_store,
                 variables=variables,
                 computed={},
-                references=module.references,  # Pass statute-path references
+                references=module.imports,  # Pass imports block
             )
 
             # Find the main variable to compute

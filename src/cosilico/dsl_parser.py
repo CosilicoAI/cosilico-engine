@@ -16,13 +16,13 @@ class TokenType(Enum):
     VERSION = "version"
     JURISDICTION = "jurisdiction"
     IMPORT = "import"
-    REFERENCES = "references"  # New: statute-path references block
+    IMPORTS = "imports"  # Import block for variables and parameters
+    REFERENCES = "references"  # Deprecated alias for imports (backwards compat)
     VARIABLE = "variable"
     ENUM = "enum"
     ENTITY = "entity"
     PERIOD = "period"
     DTYPE = "dtype"
-    REFERENCE = "reference"
     LABEL = "label"
     DESCRIPTION = "description"
     UNIT = "unit"
@@ -235,7 +235,6 @@ class VariableDef:
     entity: str
     period: str
     dtype: str
-    reference: str
     label: Optional[str] = None
     description: Optional[str] = None
     unit: Optional[str] = None
@@ -256,8 +255,8 @@ class Module:
     module_decl: Optional[ModuleDecl] = None
     version_decl: Optional[VersionDecl] = None
     jurisdiction_decl: Optional[JurisdictionDecl] = None
-    imports: list[ImportDecl] = field(default_factory=list)
-    references: Optional[ReferencesBlock] = None  # Statute-path references
+    legacy_imports: list[ImportDecl] = field(default_factory=list)  # Old import syntax
+    imports: Optional[ReferencesBlock] = None  # imports { } block for vars/params
     variables: list[VariableDef] = field(default_factory=list)
     enums: list[EnumDef] = field(default_factory=list)
 
@@ -266,8 +265,8 @@ class Lexer:
     """Tokenizer for Cosilico DSL."""
 
     KEYWORDS = {
-        "module", "version", "jurisdiction", "import", "references", "variable", "enum",
-        "entity", "period", "dtype", "reference", "label", "description",
+        "module", "version", "jurisdiction", "import", "imports", "references", "variable", "enum",
+        "entity", "period", "dtype", "label", "description",
         "unit", "formula", "defined_for", "default", "private", "internal",
         "let", "return", "if", "then", "else", "match", "case",
         "and", "or", "not", "true", "false",
@@ -488,9 +487,9 @@ class Parser:
             elif self._check(TokenType.JURISDICTION):
                 module.jurisdiction_decl = self._parse_jurisdiction_decl()
             elif self._check(TokenType.IMPORT):
-                module.imports.append(self._parse_import())
-            elif self._check(TokenType.REFERENCES):
-                module.references = self._parse_references_block()
+                module.legacy_imports.append(self._parse_import())
+            elif self._check(TokenType.IMPORTS) or self._check(TokenType.REFERENCES):
+                module.imports = self._parse_imports_block()
             elif self._check(TokenType.PRIVATE) or self._check(TokenType.INTERNAL):
                 visibility = self._advance().value
                 if self._check(TokenType.VARIABLE):
@@ -575,16 +574,22 @@ class Parser:
 
         return ImportDecl(module_path=module_path, names=names, alias=alias)
 
-    def _parse_references_block(self) -> ReferencesBlock:
-        """Parse a references block mapping aliases to statute paths.
+    def _parse_imports_block(self) -> ReferencesBlock:
+        """Parse an imports block mapping aliases to file paths.
 
         Syntax:
-            references {
-              earned_income: us/irc/subtitle_a/.../§32/c/2/A/earned_income
-              filing_status: us/irc/.../§1/filing_status
+            imports {
+              earned_income: statute/26/32/c/2/A/earned_income
+              filing_status: statute/26/1/filing_status
             }
+
+        Also accepts 'references' for backwards compatibility.
         """
-        self._consume(TokenType.REFERENCES, "Expected 'references'")
+        # Accept either 'imports' or 'references' keyword
+        if self._check(TokenType.IMPORTS):
+            self._advance()
+        else:
+            self._consume(TokenType.REFERENCES, "Expected 'imports' or 'references'")
         self._consume(TokenType.LBRACE, "Expected '{'")
 
         references = []
@@ -685,7 +690,6 @@ class Parser:
             entity="",
             period="",
             dtype="",
-            reference="",
         )
 
         while not self._check(TokenType.RBRACE) and not self._is_at_end():
@@ -698,9 +702,6 @@ class Parser:
             elif self._check(TokenType.DTYPE):
                 self._advance()
                 var.dtype = self._parse_dtype()
-            elif self._check(TokenType.REFERENCE):
-                self._advance()
-                var.reference = self._consume(TokenType.STRING, "Expected reference string").value
             elif self._check(TokenType.LABEL):
                 self._advance()
                 var.label = self._consume(TokenType.STRING, "Expected label string").value

@@ -656,7 +656,7 @@ class VectorizedExecutor:
             parameters=self.parameters,
             variables=variables,
             entity_index=entity_index,
-            references=module.references,
+            references=module.imports,
             enum_values=enum_values,
         )
 

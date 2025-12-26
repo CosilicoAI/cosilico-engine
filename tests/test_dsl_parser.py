@@ -68,8 +68,8 @@ class TestLexer:
     def test_keywords(self):
         """All keywords are recognized."""
         keywords = [
-            "module", "version", "jurisdiction", "import", "references",
-            "variable", "enum", "entity", "period", "dtype", "reference",
+            "module", "version", "jurisdiction", "import", "imports", "references",
+            "variable", "enum", "entity", "period", "dtype",
             "label", "description", "unit", "formula", "defined_for",
             "default", "private", "internal", "let", "return", "if",
             "then", "else", "match", "case", "and", "or", "not", "true", "false"
@@ -237,14 +237,12 @@ variable income_tax {
   dtype Money
   label "Income Tax"
   description "Federal income tax liability"
-  reference "26 USC 1"
 }
 '''
         module = parse_dsl(code)
         var = module.variables[0]
         assert var.label == "Income Tax"
         assert var.description == "Federal income tax liability"
-        assert var.reference == "26 USC 1"
 
     def test_variable_with_default(self):
         """Parse variable with default value."""
@@ -579,8 +577,8 @@ variable tax {
 }
 """
         module = parse_dsl(code)
-        assert module.references is not None
-        assert len(module.references.references) == 0
+        assert module.imports is not None
+        assert len(module.imports.references) == 0
 
     def test_single_reference(self):
         """Parse single reference."""
@@ -596,8 +594,8 @@ variable tax {
 }
 """
         module = parse_dsl(code)
-        assert len(module.references.references) == 1
-        ref = module.references.references[0]
+        assert len(module.imports.references) == 1
+        ref = module.imports.references[0]
         assert ref.alias == "earned_income"
         assert "statute/26/32" in ref.statute_path
 
@@ -617,8 +615,8 @@ variable tax {
 }
 """
         module = parse_dsl(code)
-        assert len(module.references.references) == 3
-        aliases = [r.alias for r in module.references.references]
+        assert len(module.imports.references) == 3
+        aliases = [r.alias for r in module.imports.references]
         assert "income" in aliases
         assert "children" in aliases
         assert "rate" in aliases
@@ -637,10 +635,10 @@ variable tax {
 }
 """
         module = parse_dsl(code)
-        path = module.references.get_path("income")
+        path = module.imports.get_path("income")
         assert path is not None
         assert "agi" in path
-        assert module.references.get_path("nonexistent") is None
+        assert module.imports.get_path("nonexistent") is None
 
 
 class TestParserModuleDeclarations:
@@ -807,8 +805,8 @@ variable earned_income_credit {
 """
         module = parse_dsl(code)
         assert len(module.variables) == 1
-        assert module.references is not None
-        assert len(module.references.references) == 3
+        assert module.imports is not None
+        assert len(module.imports.references) == 3
 
         var = module.variables[0]
         assert var.name == "earned_income_credit"
