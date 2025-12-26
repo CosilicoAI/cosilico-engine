@@ -35,7 +35,7 @@ class TokenType(Enum):
     LET = "let"
     RETURN = "return"
     IF = "if"
-    THEN = "then"
+    # THEN removed - using COLON for Python-style syntax
     ELSE = "else"
     MATCH = "match"
     CASE = "case"
@@ -273,7 +273,7 @@ class Lexer:
         "module", "version", "jurisdiction", "import", "imports", "references", "parameters", "variable", "enum",
         "entity", "period", "dtype", "label", "description",
         "unit", "formula", "defined_for", "default", "private", "internal",
-        "let", "return", "if", "then", "else", "match", "case",
+        "let", "return", "if", "else", "match", "case",
         "and", "or", "not", "true", "false",
     }
 
@@ -927,14 +927,14 @@ class Parser:
         return FormulaBlock(bindings=bindings, return_expr=return_expr)
 
     def _parse_statement_if(self) -> Optional[IfExpr]:
-        """Parse statement-level if: 'if condition then' followed by 'return value'.
+        """Parse statement-level if: 'if condition:' followed by 'return value'.
 
         Returns an IfExpr with condition and then_branch (the return value),
         or None if this isn't a statement-level if.
         """
         self._consume(TokenType.IF, "Expected 'if'")
         condition = self._parse_expression()
-        self._consume(TokenType.THEN, "Expected 'then'")
+        self._consume(TokenType.COLON, "Expected ':' after if condition")
 
         # Check if next token is RETURN (statement-level if)
         if self._check(TokenType.RETURN):
@@ -1115,7 +1115,7 @@ class Parser:
         return FormulaBlock(bindings=bindings, return_expr=return_expr)
 
     def _try_parse_if_guard(self) -> tuple | None:
-        """Try to parse an if-guard statement: if <cond> then return <expr>
+        """Try to parse an if-guard statement: if <cond>: return <expr>
 
         Returns (condition, return_value) tuple if successful, None if this is
         a regular if-expression that should be parsed differently.
@@ -1126,12 +1126,12 @@ class Parser:
         self._advance()  # consume 'if'
         condition = self._parse_expression()
 
-        if not self._check(TokenType.THEN):
+        if not self._check(TokenType.COLON):
             # Not a valid if, backtrack
             self.pos = saved_pos
             return None
 
-        self._advance()  # consume 'then'
+        self._advance()  # consume ':'
 
         # Check if next token is 'return' - that makes this a guard
         if self._check(TokenType.RETURN):
@@ -1324,7 +1324,7 @@ class Parser:
     def _parse_if_expr(self) -> IfExpr:
         self._consume(TokenType.IF, "Expected 'if'")
         condition = self._parse_expression()
-        self._consume(TokenType.THEN, "Expected 'then'")
+        self._consume(TokenType.COLON, "Expected ':' after if condition")
         then_branch = self._parse_expression()
         self._consume(TokenType.ELSE, "Expected 'else'")
         else_branch = self._parse_expression()
