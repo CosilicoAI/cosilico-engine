@@ -14,10 +14,18 @@ from .consistency import (
     ConsistencyReport,
 )
 from .reference import ReferenceValidator
+from .literals import (
+    validate_numeric_literals,
+    NumericLiteralError,
+    LiteralViolation,
+)
 
 __all__ = [
     "CrossCompilationValidator",
     "CompilationResult",
     "ConsistencyReport",
     "ReferenceValidator",
+    "validate_numeric_literals",
+    "NumericLiteralError",
+    "LiteralViolation",
 ]
