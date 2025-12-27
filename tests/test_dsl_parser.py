@@ -222,9 +222,9 @@ class TestParserVariables:
         """Parse minimal variable definition."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         assert len(module.variables) == 1
@@ -238,11 +238,11 @@ variable tax:
         """Parse variable with label and description."""
         code = '''
 variable income_tax:
-  entity TaxUnit
-  period Year
-  dtype Money
-  label "Income Tax"
-  description "Federal income tax liability"
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  label: "Income Tax"
+  description: "Federal income tax liability"
 '''
         module = parse_dsl(code)
         var = module.variables[0]
@@ -253,10 +253,10 @@ variable income_tax:
         """Parse variable with default value."""
         code = """
 variable deduction:
-  entity TaxUnit
-  period Year
-  dtype Money
-  default 0
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  default: 0
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -266,9 +266,9 @@ variable deduction:
         """Parse private variable."""
         code = """
 private variable helper:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -278,9 +278,9 @@ private variable helper:
         """Parse internal variable."""
         code = """
 internal variable intermediate:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -290,14 +290,14 @@ internal variable intermediate:
         """Parse multiple variable definitions."""
         code = """
 variable a:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
 variable b:
-  entity Person
-  period Month
-  dtype Boolean
+  entity: Person
+  period: Month
+  dtype: Boolean
 """
         module = parse_dsl(code)
         assert len(module.variables) == 2
@@ -312,9 +312,9 @@ class TestParserFormulas:
         """Parse simple return expression."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -329,9 +329,9 @@ variable tax:
         """Parse formula with let bindings."""
         code = """
 variable eitc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = 0.34
@@ -349,9 +349,9 @@ variable eitc:
         """Parse formula with conditional."""
         code = """
 variable benefit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if income < 20000: 1000 else 0
@@ -365,9 +365,9 @@ variable benefit:
         """Parse formula with nested conditionals."""
         code = """
 variable rate:
-  entity TaxUnit
-  period Year
-  dtype Rate
+  entity: TaxUnit
+  period: Year
+  dtype: Rate
 
   formula:
     return if income < 10000: 0.10 else if income < 40000: 0.22 else 0.32
@@ -383,9 +383,9 @@ variable rate:
         """Parse formula with match expression."""
         code = """
 variable deduction:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return match {
@@ -403,9 +403,9 @@ variable deduction:
         """Parse formula with function calls."""
         code = """
 variable capped:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return min(max(income, 0), 100000)
@@ -421,9 +421,9 @@ variable capped:
         """Parse formula with binary operations."""
         code = """
 variable result:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return a + b * c - d / e
@@ -438,9 +438,9 @@ variable result:
         """Parse formula with comparison operations."""
         code = """
 variable eligible:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return income >= 10000 and income <= 50000
@@ -455,9 +455,9 @@ variable eligible:
         """Parse formula with unary not."""
         code = """
 variable ineligible:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return not is_eligible
@@ -472,9 +472,9 @@ variable ineligible:
         """Parse formula with indexed parameter."""
         code = """
 variable credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = credit_rate[n_children]
@@ -503,9 +503,9 @@ variable credit:
         """
         code = """
 variable credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     if not is_eligible:
@@ -527,9 +527,9 @@ variable credit:
         """
         code = """
 variable benefit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     if income > income_limit:
@@ -555,9 +555,9 @@ class TestParserReferences:
 references:
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         assert module.imports is not None
@@ -570,9 +570,9 @@ references:
   earned_income: statute/26/32/c/2/A/earned_income
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         assert len(module.imports.references) == 1
@@ -589,9 +589,9 @@ references:
   rate: statute/26/32/b/1/credit_percentage
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         assert len(module.imports.references) == 3
@@ -607,9 +607,9 @@ references:
   income: statute/26/62/a/agi
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         path = module.imports.get_path("income")
@@ -627,9 +627,9 @@ class TestParserModuleDeclarations:
 module statute.26.32.a.1
 
 variable earned_income_credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         assert module.module_decl is not None
@@ -641,9 +641,9 @@ variable earned_income_credit:
 module gov.irs.section32.subsection_a
 
 variable eitc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         assert module.module_decl is not None
@@ -655,9 +655,9 @@ variable eitc:
 version "2024.1.0"
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 '''
         module = parse_dsl(code)
         assert module.version_decl is not None
@@ -669,9 +669,9 @@ variable tax:
 jurisdiction us
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         module = parse_dsl(code)
         assert module.jurisdiction_decl is not None
@@ -685,9 +685,9 @@ version "2024.1.0"
 jurisdiction us
 
 variable eitc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 '''
         module = parse_dsl(code)
         assert module.module_decl.path == "gov.irs.eitc"
@@ -737,9 +737,9 @@ class TestParserErrors:
         """Parser raises error on missing closing brace."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 """
         # This may or may not raise depending on implementation
         # Test documents expected behavior
@@ -753,9 +753,9 @@ variable tax:
         """Parser raises error on unknown field in variable definition."""
         code = '''
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
   reference "26 USC 1"
 '''
         with pytest.raises(SyntaxError) as exc_info:
@@ -766,9 +766,9 @@ variable tax:
         """Error message lists valid fields."""
         code = '''
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
   citation "26 USC 1"
 '''
         with pytest.raises(SyntaxError) as exc_info:
@@ -792,9 +792,9 @@ references:
   reduction: statute/26/32/a/2/B/credit_reduction_amount
 
 variable earned_income_credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     if not is_eligible: 0 else max(0, initial_credit - reduction)
@@ -820,9 +820,9 @@ references:
   is_student: statute/26/152/d/2/is_full_time_student
 
 variable is_eitc_qualifying_child:
-  entity Person
-  period Year
-  dtype Boolean
+  entity: Person
+  period: Year
+  dtype: Boolean
 
   formula:
     if not is_dependent: false
@@ -831,9 +831,9 @@ variable is_eitc_qualifying_child:
 
 
 variable count_eitc_qualifying_children:
-  entity TaxUnit
-  period Year
-  dtype Integer
+  entity: TaxUnit
+  period: Year
+  dtype: Integer
 
   formula:
     sum(members, is_eitc_qualifying_child)
@@ -848,9 +848,9 @@ variable count_eitc_qualifying_children:
         """Parsing same code twice produces equivalent results."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -861,3 +861,72 @@ variable tax:
 
         assert module1.variables[0].name == module2.variables[0].name
         assert module1.variables[0].entity == module2.variables[0].entity
+
+
+class TestV2ColonSyntax:
+    """V2 format requires colons after all field names."""
+
+    def test_entity_requires_colon(self):
+        """entity: TaxUnit is valid, entity TaxUnit is not."""
+        valid = """
+variable test:
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  formula: return 0
+"""
+        module = parse_dsl(valid)
+        assert module.variables[0].entity == "TaxUnit"
+
+    def test_entity_without_colon_fails(self):
+        """entity TaxUnit (no colon) should fail."""
+        # NOTE: Intentionally using old syntax WITHOUT colon to test error
+        invalid = "variable test:\n  entity TaxUnit\n  period: Year\n  dtype: Money\n  formula: return 0\n"
+        with pytest.raises(SyntaxError, match="Expected ':'"):
+            parse_dsl(invalid)
+
+    def test_period_requires_colon(self):
+        """period: Year is valid."""
+        valid = """
+variable test:
+  entity: Person
+  period: Year
+  dtype: Money
+  formula: return 0
+"""
+        module = parse_dsl(valid)
+        assert module.variables[0].period == "Year"
+
+    def test_dtype_requires_colon(self):
+        """dtype: Money is valid."""
+        valid = """
+variable test:
+  entity: Person
+  period: Year
+  dtype: Money
+  formula: return 0
+"""
+        module = parse_dsl(valid)
+        assert module.variables[0].dtype == "Money"
+
+    def test_all_fields_with_colons(self):
+        """All fields use colon syntax."""
+        valid = """
+variable test:
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  unit: "USD"
+  label: "Test Variable"
+  description: "A test"
+  default: 0
+  formula: return 0
+"""
+        module = parse_dsl(valid)
+        var = module.variables[0]
+        assert var.entity == "TaxUnit"
+        assert var.period == "Year"
+        assert var.dtype == "Money"
+        assert var.unit == "USD"
+        assert var.label == "Test Variable"
+        assert var.description == "A test"

@@ -302,9 +302,9 @@ class TestVectorizedExecutor:
         """Execute simple formula."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -321,9 +321,9 @@ variable tax:
         """Formula using max function."""
         code = """
 variable credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return max(0, 1000 - income * 0.1)
@@ -340,9 +340,9 @@ variable credit:
         """Formula using min function."""
         code = """
 variable capped_income:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return min(income, 50000)
@@ -358,9 +358,9 @@ variable capped_income:
         """Formula with let bindings."""
         code = """
 variable eitc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let phase_in = income * 0.34
@@ -379,9 +379,9 @@ variable eitc:
         """Formula with if/else expression."""
         code = """
 variable benefit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     if income < 20000: 1000 else 0
@@ -397,9 +397,9 @@ variable benefit:
         """Scenario caches computed results."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -421,18 +421,18 @@ variable tax:
         """Execute multiple dependent variables."""
         code = """
 variable gross_income:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return wages + interest
 
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return gross_income * 0.25
@@ -456,9 +456,9 @@ class TestEITCCalculation:
         """EITC phase-in calculation."""
         code = """
 variable eitc_phase_in:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = 0.34
@@ -479,9 +479,9 @@ variable eitc_phase_in:
         """EITC with indexed parameters by number of children."""
         code = """
 variable eitc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = credit_rate[count_children]
@@ -510,9 +510,9 @@ class TestPerformance:
         """1M entities should execute in under 10ms for simple formula."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return max(0, income * 0.25 - 1000)
@@ -541,9 +541,9 @@ enum FilingStatus:
   HEAD_OF_HOUSEHOLD
 
 variable threshold:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if filing_status == JOINT: 250000 else 200000
@@ -567,9 +567,9 @@ enum FilingStatus:
   SURVIVING_SPOUSE
 
 variable niit_threshold:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if filing_status == JOINT: 250000
@@ -599,9 +599,9 @@ enum FilingStatus:
   JOINT
 
 variable threshold:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if filing_status == "JOINT": 250000 else 200000
@@ -621,9 +621,9 @@ class TestMatchExpression:
         """Match expression should compare against the match value."""
         code = """
 variable test_rate:
-  entity TaxUnit
-  period Year
-  dtype Rate
+  entity: TaxUnit
+  period: Year
+  dtype: Rate
 
   formula:
     let n_children = min(num_qualifying_children, 3)
@@ -648,9 +648,9 @@ variable test_rate:
         """Match expression with else clause for unmatched values."""
         code = """
 variable category:
-  entity TaxUnit
-  period Year
-  dtype Rate
+  entity: TaxUnit
+  period: Year
+  dtype: Rate
 
   formula:
     return match count {

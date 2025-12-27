@@ -90,9 +90,9 @@ class TestAGICodeGeneration:
         """Simplified AGI DSL for testing code generation."""
         return """
 variable adjusted_gross_income:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let employee_income = wages + salaries + tips
@@ -131,9 +131,9 @@ class TestAGICalculation:
         """Simplified AGI DSL for testing calculations."""
         return """
 variable adjusted_gross_income:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let employee_income = wages + salaries + tips
@@ -265,9 +265,9 @@ class TestAGIPythonExecution:
         """Simplified AGI DSL for testing calculations."""
         return """
 variable adjusted_gross_income:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let employee_income = wages + salaries + tips
@@ -312,9 +312,9 @@ class TestAGICrossCompilation:
         """Simplified AGI DSL for testing."""
         return """
 variable adjusted_gross_income:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let employee_income = wages + salaries + tips

@@ -34,9 +34,9 @@ class TestCrossCompilationConsistency:
         """Simple arithmetic DSL for testing."""
         return """
 variable simple_tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -48,9 +48,9 @@ variable simple_tax:
         """DSL with conditionals."""
         return """
 variable capped_credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if income < 50000: income * 0.10 else 5000
@@ -62,9 +62,9 @@ variable capped_credit:
         """DSL with multiple features."""
         return """
 variable complex_calc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let base = income * 0.20
@@ -213,9 +213,9 @@ class TestEdgeCases:
         """Boolean literals compile consistently."""
         dsl = """
 variable is_eligible:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return true
@@ -229,9 +229,9 @@ variable is_eligible:
         """Division by zero is handled consistently."""
         dsl = """
 variable ratio:
-  entity TaxUnit
-  period Year
-  dtype Rate
+  entity: TaxUnit
+  period: Year
+  dtype: Rate
 
   formula:
     return if denominator == 0: 0 else numerator / denominator
@@ -248,9 +248,9 @@ variable ratio:
         """Negative numbers handled correctly."""
         dsl = """
 variable net:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income - expenses
@@ -280,9 +280,9 @@ console.log(net(inputs, params));
         """Floating point precision is consistent."""
         dsl = """
 variable precise_calc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return value * 0.1 + value * 0.2
@@ -317,9 +317,9 @@ class TestRealWorldFormulas:
         """EITC phase-in calculation is consistent."""
         dsl = """
 variable eitc_phase_in:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = 0.34
@@ -358,9 +358,9 @@ console.log(eitc_phase_in(inputs, params));
         """Standard deduction with filing status is consistent."""
         dsl = """
 variable standard_deduction:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return match {

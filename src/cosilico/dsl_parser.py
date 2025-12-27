@@ -249,6 +249,7 @@ class VariableDef:
     defined_for: Optional[Expression] = None
     default: Optional[Any] = None
     visibility: str = "public"  # "public", "private", "internal"
+    imports: list[str] = field(default_factory=list)  # Per-variable imports
 
 
 @dataclass
@@ -691,6 +692,90 @@ class Parser:
 
         return ReferencesBlock(references=references)
 
+    def _parse_variable_imports(self) -> list[str]:
+        """Parse per-variable imports in YAML list format.
+
+        Syntax:
+            imports:
+              - 26/32/c/2/A#earned_income
+              - 26/62/a#adjusted_gross_income as agi
+
+        Or inline: imports: [26/32/c#earned_income, 26/62/a#agi]
+        """
+        imports = []
+
+        # Check for inline list format: [path, path, ...]
+        if self._check(TokenType.LBRACKET):
+            self._advance()  # consume '['
+            while not self._check(TokenType.RBRACKET) and not self._is_at_end():
+                # Parse path#variable format
+                import_path = self._parse_import_path()
+                imports.append(import_path)
+                if self._check(TokenType.COMMA):
+                    self._advance()
+            self._consume(TokenType.RBRACKET, "Expected ']'")
+            return imports
+
+        # YAML list format: lines starting with '-'
+        # We detect this by looking for MINUS token at start of import
+        top_level_keywords = {
+            TokenType.ENTITY, TokenType.PERIOD, TokenType.DTYPE,
+            TokenType.LABEL, TokenType.DESCRIPTION, TokenType.UNIT,
+            TokenType.FORMULA, TokenType.DEFINED_FOR, TokenType.DEFAULT,
+            TokenType.VARIABLE, TokenType.ENUM, TokenType.PRIVATE,
+            TokenType.INTERNAL, TokenType.MODULE, TokenType.VERSION,
+            TokenType.PARAMETERS,
+        }
+
+        while not self._is_at_end():
+            # Check if we've hit a top-level keyword (end of imports)
+            if any(self._check(kw) for kw in top_level_keywords):
+                break
+
+            # Expect '-' for list item
+            if self._check(TokenType.MINUS):
+                self._advance()  # consume '-'
+                import_path = self._parse_import_path()
+                imports.append(import_path)
+            else:
+                # Not a list item, end of imports block
+                break
+
+        return imports
+
+    def _parse_import_path(self) -> str:
+        """Parse a single import path like '26/32/c/2/A#earned_income' or 'path#var as alias'."""
+        parts = []
+
+        # Parse path components until we hit #, 'as', or end
+        while not self._is_at_end():
+            if self._check(TokenType.HASH):
+                self._advance()
+                parts.append("#")
+                # Variable name after #
+                if self._check(TokenType.IDENTIFIER):
+                    parts.append(self._advance().value)
+                break
+            elif self._check(TokenType.IDENTIFIER):
+                parts.append(self._advance().value)
+            elif self._check(TokenType.NUMBER):
+                parts.append(str(int(self._advance().value)))
+            elif self._check(TokenType.SLASH):
+                self._advance()
+                parts.append("/")
+            elif self._check(TokenType.AS):
+                # 'as alias' - skip for now, just capture the alias
+                self._advance()
+                if self._check(TokenType.IDENTIFIER):
+                    alias = self._advance().value
+                    # Append alias info if needed
+                    parts.append(f" as {alias}")
+                break
+            else:
+                break
+
+        return "".join(parts)
+
     def _parse_statute_path(self) -> str:
         """Parse a statute path like 'us/irc/subtitle_a/.../§32/c/2/A/variable_name'."""
         # Consume tokens until we hit something that's not part of a path
@@ -832,24 +917,31 @@ class Parser:
         while not self._is_at_end():
             if self._check(TokenType.ENTITY):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after entity")
                 var.entity = self._consume(TokenType.IDENTIFIER, "Expected entity type").value
             elif self._check(TokenType.PERIOD):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after period")
                 var.period = self._consume(TokenType.IDENTIFIER, "Expected period type").value
             elif self._check(TokenType.DTYPE):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after dtype")
                 var.dtype = self._parse_dtype()
             elif self._check(TokenType.LABEL):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after label")
                 var.label = self._consume(TokenType.STRING, "Expected label string").value
             elif self._check(TokenType.DESCRIPTION):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after description")
                 var.description = self._consume(TokenType.STRING, "Expected description string").value
             elif self._check(TokenType.UNIT):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after unit")
                 var.unit = self._consume(TokenType.STRING, "Expected unit string").value
             elif self._check(TokenType.DEFAULT):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after default")
                 var.default = self._parse_literal_value()
             elif self._check(TokenType.FORMULA):
                 self._advance()
@@ -860,14 +952,8 @@ class Parser:
                 break  # Formula is last, stop parsing
             elif self._check(TokenType.DEFINED_FOR):
                 self._advance()
-                # defined_for can use colon syntax too
-                if self._check(TokenType.COLON):
-                    self._advance()
-                elif self._check(TokenType.LBRACE):
-                    self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after defined_for")
                 var.defined_for = self._parse_expression()
-                if self._check(TokenType.RBRACE):
-                    self._advance()
             else:
                 # Unknown token - stop parsing this variable
                 break
@@ -1108,28 +1194,39 @@ class Parser:
         # For now, parse until we see another top-level keyword or EOF
         while not self._is_at_end():
             # Check for end of variable block (next top-level element)
+            # Note: IMPORTS inside variable block is per-variable imports, not module-level
             if self._check(TokenType.VARIABLE) or self._check(TokenType.ENUM) or \
-               self._check(TokenType.MODULE) or self._check(TokenType.IMPORTS) or \
-               self._check(TokenType.REFERENCES) or self._check(TokenType.PARAMETERS):
+               self._check(TokenType.MODULE) or self._check(TokenType.PARAMETERS):
                 break
 
-            if self._check(TokenType.ENTITY):
+            if self._check(TokenType.IMPORTS) or self._check(TokenType.REFERENCES):
+                # Per-variable imports: imports: [path#var, ...] or imports:\n  - path#var
+                self._advance()  # consume 'imports' or 'references'
+                self._consume(TokenType.COLON, "Expected ':' after imports")
+                var.imports = self._parse_variable_imports()
+            elif self._check(TokenType.ENTITY):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after entity")
                 var.entity = self._consume(TokenType.IDENTIFIER, "Expected entity type").value
             elif self._check(TokenType.PERIOD):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after period")
                 var.period = self._consume(TokenType.IDENTIFIER, "Expected period type").value
             elif self._check(TokenType.DTYPE):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after dtype")
                 var.dtype = self._parse_dtype()
             elif self._check(TokenType.LABEL):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after label")
                 var.label = self._consume(TokenType.STRING, "Expected label string").value
             elif self._check(TokenType.DESCRIPTION):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after description")
                 var.description = self._consume(TokenType.STRING, "Expected description string").value
             elif self._check(TokenType.UNIT):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after unit")
                 var.unit = self._consume(TokenType.STRING, "Expected unit string").value
             elif self._check(TokenType.FORMULA):
                 self._advance()
@@ -1142,6 +1239,7 @@ class Parser:
                 var.defined_for = self._parse_expression()
             elif self._check(TokenType.DEFAULT):
                 self._advance()
+                self._consume(TokenType.COLON, "Expected ':' after default")
                 var.default = self._parse_literal_value()
             elif self._check(TokenType.IDENTIFIER):
                 # Unknown field - raise helpful error

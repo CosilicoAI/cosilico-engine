@@ -54,9 +54,9 @@ class TestPyGeneratorBasic:
         """Generate code for numeric literal."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return 42
@@ -70,9 +70,9 @@ variable tax:
         """Generate code for boolean true."""
         code = """
 variable flag:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return true
@@ -85,9 +85,9 @@ variable flag:
         """Generate code for boolean false."""
         code = """
 variable flag:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return false
@@ -100,9 +100,9 @@ variable flag:
         """Generate code for arithmetic operations."""
         code = """
 variable result:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -120,9 +120,9 @@ class TestPyGeneratorOperators:
         """Generate code for addition."""
         code = """
 variable sum:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return a + b
@@ -135,9 +135,9 @@ variable sum:
         """Generate code for subtraction."""
         code = """
 variable diff:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return a - b
@@ -150,9 +150,9 @@ variable diff:
         """Generate code for multiplication."""
         code = """
 variable product:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return a * b
@@ -165,9 +165,9 @@ variable product:
         """Generate code for division."""
         code = """
 variable quotient:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return a / b
@@ -180,9 +180,9 @@ variable quotient:
         """Generate code for comparison operators."""
         code = """
 variable cmp:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return a < b and c > d and e <= f and g >= h and i == j and k != l
@@ -200,9 +200,9 @@ variable cmp:
         """Generate code for logical AND."""
         code = """
 variable both:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return a and b
@@ -216,9 +216,9 @@ variable both:
         """Generate code for logical OR."""
         code = """
 variable either:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return a or b
@@ -232,9 +232,9 @@ variable either:
         """Generate code for logical NOT."""
         code = """
 variable negated:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return not a
@@ -252,9 +252,9 @@ class TestPyGeneratorConditionals:
         """Generate code for if/then/else."""
         code = """
 variable benefit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if income < 20000: 1000 else 0
@@ -268,9 +268,9 @@ variable benefit:
         """Generate code for nested conditionals."""
         code = """
 variable rate:
-  entity TaxUnit
-  period Year
-  dtype Rate
+  entity: TaxUnit
+  period: Year
+  dtype: Rate
 
   formula:
     return if income < 10000: 0.10 else if income < 40000: 0.22 else 0.32
@@ -288,9 +288,9 @@ class TestPyGeneratorFunctions:
         """Generate code for min()."""
         code = """
 variable capped:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return min(income, 100000)
@@ -303,9 +303,9 @@ variable capped:
         """Generate code for max()."""
         code = """
 variable floor:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return max(income, 0)
@@ -318,9 +318,9 @@ variable floor:
         """Generate code for nested function calls."""
         code = """
 variable clamped:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return min(max(income, 0), 100000)
@@ -338,9 +338,9 @@ class TestPyGeneratorLetBindings:
         """Generate code for single let binding."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = 0.25
@@ -355,9 +355,9 @@ variable tax:
         """Generate code for multiple let bindings."""
         code = """
 variable eitc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = 0.34
@@ -379,9 +379,9 @@ class TestPyGeneratorMatch:
         """Generate code for match expression."""
         code = """
 variable deduction:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return match {
@@ -404,9 +404,9 @@ class TestPyGeneratorModule:
         """Generated code should be a callable function."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -420,18 +420,18 @@ variable tax:
         """Generate code for multiple variables."""
         code = """
 variable gross_income:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return wages + interest
 
 
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return gross_income * 0.25
@@ -449,9 +449,9 @@ class TestPyGeneratorExecution:
         """Execute generated Python with scalar inputs."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -469,9 +469,9 @@ variable tax:
         """Execute generated Python with array inputs."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -490,9 +490,9 @@ variable tax:
         """Execute generated Python with conditionals."""
         code = """
 variable capped_credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if income < 50000: income * 0.10 else 5000
@@ -510,9 +510,9 @@ variable capped_credit:
         """Execute generated Python with min/max functions."""
         code = """
 variable complex_calc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let base = income * 0.20
@@ -532,9 +532,9 @@ variable complex_calc:
         """Execute generated Python with boolean operations."""
         code = """
 variable is_eligible:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return income > 1000 and income < 50000
@@ -556,9 +556,9 @@ class TestPyGeneratorMatchesJS:
         """Python arithmetic matches JS results."""
         code = """
 variable simple_tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -584,9 +584,9 @@ variable simple_tax:
         """Python conditionals match JS results."""
         code = """
 variable capped_credit:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return if income < 50000: income * 0.10 else 5000
@@ -611,9 +611,9 @@ variable capped_credit:
         """Python functions match JS results."""
         code = """
 variable complex_calc:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let base = income * 0.20
@@ -644,9 +644,9 @@ class TestPyGeneratorRealWorld:
         """EITC phase-in calculation."""
         code = """
 variable eitc_phase_in:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     let rate = 0.34
@@ -672,9 +672,9 @@ variable eitc_phase_in:
         """Standard deduction with filing status."""
         code = """
 variable standard_deduction:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return match {
@@ -701,9 +701,9 @@ class TestPyGeneratorVectorization:
         """Scalar parameters broadcast to array inputs."""
         code = """
 variable tax:
-  entity TaxUnit
-  period Year
-  dtype Money
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 
   formula:
     return income * 0.25
@@ -722,9 +722,9 @@ variable tax:
         """Comparisons work element-wise."""
         code = """
 variable threshold_check:
-  entity TaxUnit
-  period Year
-  dtype Boolean
+  entity: TaxUnit
+  period: Year
+  dtype: Boolean
 
   formula:
     return income >= threshold
