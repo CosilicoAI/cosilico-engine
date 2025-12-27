@@ -23,4 +23,15 @@ jobs:
           pip install pytest
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        run: pytest tests/ -v --tb=short --ignore=tests/test_rac_format.py
+
+      - name: Checkout cosilico-us for format tests
+        uses: actions/checkout@v4
+        with:
+          repository: CosilicoAI/cosilico-us
+          path: cosilico-us
+
+      - name: Run .rac format tests
+        env:
+          STATUTE_DIR: cosilico-us/statute
+        run: pytest tests/test_rac_format.py -v --tb=short
