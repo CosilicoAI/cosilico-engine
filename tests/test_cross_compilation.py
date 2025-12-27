@@ -368,8 +368,7 @@ variable standard_deduction:
       case filing_status == "JOINT" => 29200
       case filing_status == "HEAD_OF_HOUSEHOLD" => 21900
       else => 14600
-
-
+    }
 """
         module = parse_dsl(dsl)
         js = generate_js(module)

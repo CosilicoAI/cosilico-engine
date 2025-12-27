@@ -75,6 +75,10 @@ class OverrideResolver:
         for yaml_file in irs_dir.rglob("*.yaml"):
             self._load_irs_guidance(yaml_file)
 
+        # Also load .rac files from IRS directory
+        for rac_file in irs_dir.rglob("*.rac"):
+            self._load_irs_guidance_rac(rac_file)
+
     def _load_irs_guidance(self, filepath: Path):
         """Load overrides from an IRS guidance file."""
         try:
@@ -128,19 +132,90 @@ class OverrideResolver:
         except Exception as e:
             print(f"Warning: Failed to load IRS guidance {filepath}: {e}")
 
+    def _load_irs_guidance_rac(self, filepath: Path):
+        """Load overrides from an IRS guidance .rac file.
+
+        Parses parameters with `overrides:` field and `brackets:` values.
+        """
+        import re
+
+        try:
+            with open(filepath) as f:
+                content = f.read()
+
+            # Extract tax year from source metadata
+            source_match = re.search(
+                r'source:\s*\n(?:[ \t]+[^\n]*\n)*?[ \t]+effective_date:\s*(\d{4})-\d{2}-\d{2}',
+                content
+            )
+            if source_match:
+                tax_year = int(source_match.group(1))
+            else:
+                # Try to extract from filename (e.g., rp-23-34.rac for 2024)
+                match = re.search(r'rp-(\d{2})-(\d+)', filepath.stem)
+                if match:
+                    # rp-23-34 means 2024 (year after first number)
+                    tax_year = 2000 + int(match.group(1)) + 1
+                else:
+                    return
+
+            # Match parameter blocks with overrides
+            param_pattern = r'parameter\s+(\w+):\s*\n((?:[ \t]+[^\n]*\n)*)'
+            for match in re.finditer(param_pattern, content):
+                param_name = match.group(1)
+                param_body = match.group(2)
+
+                # Check if this has an overrides field
+                override_match = re.search(r'overrides:\s*([^\n]+)', param_body)
+                if not override_match:
+                    continue
+
+                target_path = override_match.group(1).strip()
+
+                # Parse brackets section
+                brackets = {}
+                brackets_match = re.search(r'brackets:\s*\n((?:[ \t]+[^\n]*\n)*)', param_body)
+                if brackets_match:
+                    brackets_block = brackets_match.group(1)
+                    for line in brackets_block.strip().split('\n'):
+                        line = line.strip()
+                        if ':' in line and not line.startswith('#'):
+                            rate_str, threshold_str = line.split(':', 1)
+                            rate_str = rate_str.strip()
+                            threshold_str = threshold_str.strip()
+                            try:
+                                rate = float(rate_str)
+                                threshold = int(threshold_str)
+                                brackets[rate] = threshold
+                            except ValueError:
+                                continue
+
+                if brackets:
+                    override = Override(
+                        source_path=str(filepath.relative_to(self.rules_dir)),
+                        target_path=target_path,
+                        implements="",
+                        tax_year=tax_year,
+                        value=brackets,
+                    )
+                    self.index.add(override)
+
+        except Exception as e:
+            print(f"Warning: Failed to load IRS guidance RAC {filepath}: {e}")
+
     def load_base_value(self, path: str) -> Optional[dict]:
-        """Load a base parameter YAML file.
+        """Load a base parameter file (.yaml or .rac).
 
         Args:
             path: Statute path like "statute/26/32/b/2/A/base_amounts"
 
         Returns:
-            The YAML data, or None if not found.
+            The parameter data, or None if not found.
         """
         if path in self._base_values:
             return self._base_values[path]
 
-        # Try .yaml extension
+        # Try .yaml extension first
         yaml_path = self.rules_dir / f"{path}.yaml"
         if yaml_path.exists():
             with open(yaml_path) as f:
@@ -148,7 +223,102 @@ class OverrideResolver:
             self._base_values[path] = data
             return data
 
+        # Try .rac extension (new RAC format)
+        rac_path = self.rules_dir / f"{path}.rac"
+        if rac_path.exists():
+            data = self._parse_rac_parameters(rac_path)
+            if data:
+                self._base_values[path] = data
+                return data
+
         return None
+
+    def _parse_rac_parameters(self, filepath: Path) -> Optional[dict]:
+        """Parse parameters from a .rac file.
+
+        Extracts parameter declarations in the format:
+            parameter name:
+              values:
+                YYYY-MM-DD: value
+        Or for tax brackets:
+            parameter name:
+              brackets:
+                rate: threshold
+        """
+        import re
+        from datetime import date as dt_date
+
+        try:
+            with open(filepath) as f:
+                content = f.read()
+
+            params = {}
+            # Match parameter blocks
+            param_pattern = r'parameter\s+(\w+):\s*\n((?:[ \t]+[^\n]*\n)*)'
+            for match in re.finditer(param_pattern, content):
+                param_name = match.group(1)
+                param_body = match.group(2)
+
+                # Try to parse brackets section (for tax brackets)
+                brackets_match = re.search(r'brackets:\s*\n((?:[ \t]+[^\n]*\n)*)', param_body)
+                if brackets_match:
+                    brackets = {}
+                    brackets_block = brackets_match.group(1)
+                    for line in brackets_block.strip().split('\n'):
+                        line = line.strip()
+                        if ':' in line and not line.startswith('#'):
+                            rate_str, threshold_str = line.split(':', 1)
+                            rate_str = rate_str.strip()
+                            threshold_str = threshold_str.strip()
+                            try:
+                                rate = float(rate_str)
+                                threshold = int(threshold_str)
+                                brackets[rate] = threshold
+                            except ValueError:
+                                continue
+                    if brackets:
+                        params[param_name] = brackets
+                    continue
+
+                # Parse values section
+                values = {}
+                values_match = re.search(r'values:\s*\n((?:[ \t]+[^\n]*\n)*)', param_body)
+                if values_match:
+                    values_block = values_match.group(1)
+                    # Parse date: value pairs
+                    for line in values_block.strip().split('\n'):
+                        line = line.strip()
+                        if ':' in line and not line.startswith('#'):
+                            date_str, value_str = line.split(':', 1)
+                            date_str = date_str.strip()
+                            value_str = value_str.strip()
+                            try:
+                                # Parse date
+                                parts = date_str.split('-')
+                                if len(parts) == 3:
+                                    param_date = dt_date(int(parts[0]), int(parts[1]), int(parts[2]))
+                                    # Parse value
+                                    if value_str == '.inf':
+                                        value = float('inf')
+                                    elif value_str.startswith('.'):
+                                        value = float('0' + value_str)
+                                    else:
+                                        try:
+                                            value = int(value_str)
+                                        except ValueError:
+                                            value = float(value_str)
+                                    values[param_date] = value
+                            except (ValueError, IndexError):
+                                continue
+
+                if values:
+                    params[param_name] = {"values": values}
+
+            return params if params else None
+
+        except Exception as e:
+            print(f"Warning: Failed to parse RAC parameters from {filepath}: {e}")
+            return None
 
     def resolve(
         self,

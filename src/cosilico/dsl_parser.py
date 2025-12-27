@@ -267,6 +267,11 @@ class Module:
     variables: list[VariableDef] = field(default_factory=list)
     enums: list[EnumDef] = field(default_factory=list)
 
+    @property
+    def references(self) -> Optional[ReferencesBlock]:
+        """Alias for imports block - used by vectorized executor."""
+        return self.imports
+
 
 class Lexer:
     """Tokenizer for Cosilico DSL."""
