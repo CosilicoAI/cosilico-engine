@@ -33,47 +33,44 @@ class TestCrossCompilationConsistency:
     def simple_dsl(self) -> str:
         """Simple arithmetic DSL for testing."""
         return """
-variable simple_tax {
+variable simple_tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
 
     @pytest.fixture
     def conditional_dsl(self) -> str:
         """DSL with conditionals."""
         return """
-variable capped_credit {
+variable capped_credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if income < 50000 then income * 0.10 else 5000
-  }
-}
+  formula:
+    return if income < 50000: income * 0.10 else 5000
+
 """
 
     @pytest.fixture
     def complex_dsl(self) -> str:
         """DSL with multiple features."""
         return """
-variable complex_calc {
+variable complex_calc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let base = income * 0.20
     let cap = 10000
     return min(base, cap)
-  }
-}
+
 """
 
     def _execute_js(self, js_code: str, inputs: dict[str, Any]) -> float:
@@ -215,15 +212,14 @@ class TestEdgeCases:
     def test_boolean_literals(self):
         """Boolean literals compile consistently."""
         dsl = """
-variable is_eligible {
+variable is_eligible:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return true
-  }
-}
+
 """
         module = parse_dsl(dsl)
         js = generate_js(module)
@@ -232,15 +228,14 @@ variable is_eligible {
     def test_zero_division_handling(self):
         """Division by zero is handled consistently."""
         dsl = """
-variable ratio {
+variable ratio:
   entity TaxUnit
   period Year
   dtype Rate
 
-  formula {
-    return if denominator == 0 then 0 else numerator / denominator
-  }
-}
+  formula:
+    return if denominator == 0: 0 else numerator / denominator
+
 """
         module = parse_dsl(dsl)
         js = generate_js(module)
@@ -252,15 +247,14 @@ variable ratio {
     def test_negative_numbers(self):
         """Negative numbers handled correctly."""
         dsl = """
-variable net {
+variable net:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income - expenses
-  }
-}
+
 """
         module = parse_dsl(dsl)
         js = generate_js(module)
@@ -285,15 +279,14 @@ console.log(net(inputs, params));
     def test_floating_point_precision(self):
         """Floating point precision is consistent."""
         dsl = """
-variable precise_calc {
+variable precise_calc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return value * 0.1 + value * 0.2
-  }
-}
+
 """
         module = parse_dsl(dsl)
         js = generate_js(module)
@@ -323,17 +316,16 @@ class TestRealWorldFormulas:
     def test_eitc_phase_in_formula(self):
         """EITC phase-in calculation is consistent."""
         dsl = """
-variable eitc_phase_in {
+variable eitc_phase_in:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.34
     let earned_income_cap = 11750
     return min(earned_income, earned_income_cap) * rate
-  }
-}
+
 """
         module = parse_dsl(dsl)
         js = generate_js(module)
@@ -365,20 +357,19 @@ console.log(eitc_phase_in(inputs, params));
     def test_standard_deduction_formula(self):
         """Standard deduction with filing status is consistent."""
         dsl = """
-variable standard_deduction {
+variable standard_deduction:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return match {
       case filing_status == "SINGLE" => 14600
       case filing_status == "JOINT" => 29200
       case filing_status == "HEAD_OF_HOUSEHOLD" => 21900
       else => 14600
-    }
-  }
-}
+
+
 """
         module = parse_dsl(dsl)
         js = generate_js(module)

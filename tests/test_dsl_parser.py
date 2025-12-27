@@ -72,7 +72,7 @@ class TestLexer:
             "variable", "enum", "entity", "period", "dtype",
             "label", "description", "unit", "formula", "defined_for",
             "default", "private", "internal", "let", "return", "if",
-            "then", "else", "match", "case", "and", "or", "not", "true", "false"
+            "else", "elif", "match", "case", "and", "or", "not", "true", "false"
         ]
         for kw in keywords:
             lexer = Lexer(kw)
@@ -130,12 +130,19 @@ class TestLexer:
         assert tokens[6].value == 1
 
     def test_negative_number(self):
-        """Negative numbers are parsed correctly."""
+        """Negative numbers are lexed as MINUS + NUMBER tokens.
+
+        Negative number construction happens in the parser, not lexer.
+        This allows distinguishing `a - 42` from `-42`.
+        """
         lexer = Lexer("-42 -3.14")
         tokens = lexer.tokenize()
-        assert tokens[0].type == TokenType.NUMBER
-        assert tokens[0].value == -42
-        assert tokens[1].value == -3.14
+        assert tokens[0].type == TokenType.MINUS
+        assert tokens[1].type == TokenType.NUMBER
+        assert tokens[1].value == 42
+        assert tokens[2].type == TokenType.MINUS
+        assert tokens[3].type == TokenType.NUMBER
+        assert tokens[3].value == 3.14
 
     def test_percentage(self):
         """Percentages are converted to decimals."""
@@ -214,11 +221,10 @@ class TestParserVariables:
     def test_minimal_variable(self):
         """Parse minimal variable definition."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         assert len(module.variables) == 1
@@ -231,13 +237,12 @@ variable tax {
     def test_variable_with_metadata(self):
         """Parse variable with label and description."""
         code = '''
-variable income_tax {
+variable income_tax:
   entity TaxUnit
   period Year
   dtype Money
   label "Income Tax"
   description "Federal income tax liability"
-}
 '''
         module = parse_dsl(code)
         var = module.variables[0]
@@ -247,12 +252,11 @@ variable income_tax {
     def test_variable_with_default(self):
         """Parse variable with default value."""
         code = """
-variable deduction {
+variable deduction:
   entity TaxUnit
   period Year
   dtype Money
   default 0
-}
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -261,11 +265,10 @@ variable deduction {
     def test_private_variable(self):
         """Parse private variable."""
         code = """
-private variable helper {
+private variable helper:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -274,11 +277,10 @@ private variable helper {
     def test_internal_variable(self):
         """Parse internal variable."""
         code = """
-internal variable intermediate {
+internal variable intermediate:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -287,17 +289,15 @@ internal variable intermediate {
     def test_multiple_variables(self):
         """Parse multiple variable definitions."""
         code = """
-variable a {
+variable a:
   entity TaxUnit
   period Year
   dtype Money
-}
 
-variable b {
+variable b:
   entity Person
   period Month
   dtype Boolean
-}
 """
         module = parse_dsl(code)
         assert len(module.variables) == 2
@@ -311,15 +311,14 @@ class TestParserFormulas:
     def test_simple_formula(self):
         """Parse simple return expression."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -329,17 +328,16 @@ variable tax {
     def test_formula_with_let_binding(self):
         """Parse formula with let bindings."""
         code = """
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.34
     let cap = 6960
     return min(income * rate, cap)
-  }
-}
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -350,15 +348,14 @@ variable eitc {
     def test_formula_with_if_else(self):
         """Parse formula with conditional."""
         code = """
-variable benefit {
+variable benefit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if income < 20000 then 1000 else 0
-  }
-}
+  formula:
+    return if income < 20000: 1000 else 0
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -367,15 +364,14 @@ variable benefit {
     def test_formula_with_nested_if(self):
         """Parse formula with nested conditionals."""
         code = """
-variable rate {
+variable rate:
   entity TaxUnit
   period Year
   dtype Rate
 
-  formula {
-    return if income < 10000 then 0.10 else if income < 40000 then 0.22 else 0.32
-  }
-}
+  formula:
+    return if income < 10000: 0.10 else if income < 40000: 0.22 else 0.32
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -386,19 +382,17 @@ variable rate {
     def test_formula_with_match(self):
         """Parse formula with match expression."""
         code = """
-variable deduction {
+variable deduction:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return match {
       case filing_status == "SINGLE" => 14600
       case filing_status == "JOINT" => 29200
       else => 0
     }
-  }
-}
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -408,15 +402,14 @@ variable deduction {
     def test_formula_with_function_calls(self):
         """Parse formula with function calls."""
         code = """
-variable capped {
+variable capped:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return min(max(income, 0), 100000)
-  }
-}
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -427,15 +420,14 @@ variable capped {
     def test_formula_with_binary_ops(self):
         """Parse formula with binary operations."""
         code = """
-variable result {
+variable result:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a + b * c - d / e
-  }
-}
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -445,15 +437,14 @@ variable result {
     def test_formula_with_comparison_ops(self):
         """Parse formula with comparison operations."""
         code = """
-variable eligible {
+variable eligible:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return income >= 10000 and income <= 50000
-  }
-}
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -463,15 +454,14 @@ variable eligible {
     def test_formula_with_unary_not(self):
         """Parse formula with unary not."""
         code = """
-variable ineligible {
+variable ineligible:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return not is_eligible
-  }
-}
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -481,16 +471,15 @@ variable ineligible {
     def test_formula_with_parameter_index(self):
         """Parse formula with indexed parameter."""
         code = """
-variable credit {
+variable credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = credit_rate[n_children]
     return income * rate
-  }
-}
+
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -513,18 +502,16 @@ variable credit {
         This is different from if-then-else expressions.
         """
         code = """
-variable credit {
+variable credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    if not is_eligible then
+  formula:
+    if not is_eligible:
       return 0
 
     return max(0, amount - reduction)
-  }
-}
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -539,21 +526,19 @@ variable credit {
         Pattern for checking multiple conditions before main computation.
         """
         code = """
-variable benefit {
+variable benefit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    if income > income_limit then
+  formula:
+    if income > income_limit:
       return 0
 
-    if age < 18 then
+    if age < 18:
       return 0
 
     return base_amount * phase_in_rate
-  }
-}
 """
         module = parse_dsl(code)
         var = module.variables[0]
@@ -567,14 +552,12 @@ class TestParserReferences:
     def test_empty_references(self):
         """Parse empty references block."""
         code = """
-references {
-}
+references:
 
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         assert module.imports is not None
@@ -583,15 +566,13 @@ variable tax {
     def test_single_reference(self):
         """Parse single reference."""
         code = """
-references {
+references:
   earned_income: statute/26/32/c/2/A/earned_income
-}
 
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         assert len(module.imports.references) == 1
@@ -602,17 +583,15 @@ variable tax {
     def test_multiple_references(self):
         """Parse multiple references."""
         code = """
-references {
+references:
   income: statute/26/62/a/adjusted_gross_income
   children: statute/26/32/c/3/count_qualifying_children
   rate: statute/26/32/b/1/credit_percentage
-}
 
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         assert len(module.imports.references) == 3
@@ -624,15 +603,13 @@ variable tax {
     def test_references_get_path(self):
         """Test ReferencesBlock.get_path method."""
         code = """
-references {
+references:
   income: statute/26/62/a/agi
-}
 
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         path = module.imports.get_path("income")
@@ -649,11 +626,10 @@ class TestParserModuleDeclarations:
         code = """
 module statute.26.32.a.1
 
-variable earned_income_credit {
+variable earned_income_credit:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         assert module.module_decl is not None
@@ -664,11 +640,10 @@ variable earned_income_credit {
         code = """
 module gov.irs.section32.subsection_a
 
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         assert module.module_decl is not None
@@ -679,11 +654,10 @@ variable eitc {
         code = '''
 version "2024.1.0"
 
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
-}
 '''
         module = parse_dsl(code)
         assert module.version_decl is not None
@@ -694,11 +668,10 @@ variable tax {
         code = """
 jurisdiction us
 
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
-}
 """
         module = parse_dsl(code)
         assert module.jurisdiction_decl is not None
@@ -711,11 +684,10 @@ module gov.irs.eitc
 version "2024.1.0"
 jurisdiction us
 
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
-}
 '''
         module = parse_dsl(code)
         assert module.module_decl.path == "gov.irs.eitc"
@@ -729,12 +701,11 @@ class TestParserEnums:
     def test_simple_enum(self):
         """Parse simple enum."""
         code = """
-enum FilingStatus {
+enum FilingStatus:
   SINGLE
   JOINT
   HEAD_OF_HOUSEHOLD
   MARRIED_FILING_SEPARATELY
-}
 """
         module = parse_dsl(code)
         assert len(module.enums) == 1
@@ -765,7 +736,7 @@ class TestParserErrors:
     def test_missing_brace(self):
         """Parser raises error on missing closing brace."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
@@ -781,12 +752,11 @@ variable tax {
     def test_unknown_field_in_variable(self):
         """Parser raises error on unknown field in variable definition."""
         code = '''
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
   reference "26 USC 1"
-}
 '''
         with pytest.raises(SyntaxError) as exc_info:
             parse_dsl(code)
@@ -795,12 +765,11 @@ variable tax {
     def test_unknown_field_helpful_message(self):
         """Error message lists valid fields."""
         code = '''
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
   citation "26 USC 1"
-}
 '''
         with pytest.raises(SyntaxError) as exc_info:
             parse_dsl(code)
@@ -817,21 +786,19 @@ class TestParserIntegration:
         # Note: The DSL uses functional if/then/else expressions, not imperative
         # if statements with early returns. The entire if/then/else is one expression.
         code = """
-references {
+references:
   is_eligible: statute/26/32/c/1/A/is_eligible_individual
   initial_credit: statute/26/32/a/2/A/initial_credit_amount
   reduction: statute/26/32/a/2/B/credit_reduction_amount
-}
 
-variable earned_income_credit {
+variable earned_income_credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    if not is_eligible then 0 else max(0, initial_credit - reduction)
-  }
-}
+  formula:
+    if not is_eligible: 0 else max(0, initial_credit - reduction)
+
 """
         module = parse_dsl(code)
         assert len(module.variables) == 1
@@ -846,34 +813,31 @@ variable earned_income_credit {
         """Parse qualifying child example with two variables."""
         # Note: Uses functional if/then/else - nested conditionals are one expression
         code = """
-references {
+references:
   age: core/person/age
   is_dependent: statute/26/152/is_dependent
   max_age: statute/26/32/c/3/A/max_age
   is_student: statute/26/152/d/2/is_full_time_student
-}
 
-variable is_eitc_qualifying_child {
+variable is_eitc_qualifying_child:
   entity Person
   period Year
   dtype Boolean
 
-  formula {
-    if not is_dependent then false
-    else if age < max_age then true
+  formula:
+    if not is_dependent: false
+    else if age < max_age: true
     else false
-  }
-}
 
-variable count_eitc_qualifying_children {
+
+variable count_eitc_qualifying_children:
   entity TaxUnit
   period Year
   dtype Integer
 
-  formula {
+  formula:
     sum(members, is_eitc_qualifying_child)
-  }
-}
+
 """
         module = parse_dsl(code)
         assert len(module.variables) == 2
@@ -883,15 +847,14 @@ variable count_eitc_qualifying_children {
     def test_roundtrip_consistency(self):
         """Parsing same code twice produces equivalent results."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         module1 = parse_dsl(code)
         module2 = parse_dsl(code)

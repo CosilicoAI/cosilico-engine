@@ -32,8 +32,8 @@ class TestAGIParsing:
         from pathlib import Path
         # Statute files are in cosilico-us, not cosilico-engine
         candidates = [
-            Path.home() / "CosilicoAI" / "cosilico-us" / "26/62/a/adjusted_gross_income.cosilico",
-            Path(__file__).parents[2] / "cosilico-us" / "26/62/a/adjusted_gross_income.cosilico",
+            Path.home() / "CosilicoAI" / "cosilico-us" / "26/62/a/adjusted_gross_income.rac",
+            Path(__file__).parents[2] / "cosilico-us" / "26/62/a/adjusted_gross_income.rac",
         ]
         for path in candidates:
             if path.exists():
@@ -89,17 +89,16 @@ class TestAGICodeGeneration:
     def agi_dsl(self) -> str:
         """Simplified AGI DSL for testing code generation."""
         return """
-variable adjusted_gross_income {
+variable adjusted_gross_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let employee_income = wages + salaries + tips
     let investment_income = interest_income + dividend_income + capital_gains
     return employee_income + self_employment_income + investment_income + other_income
-  }
-}
+
 """
 
     def test_js_generation(self, agi_dsl: str):
@@ -131,17 +130,16 @@ class TestAGICalculation:
     def agi_dsl(self) -> str:
         """Simplified AGI DSL for testing calculations."""
         return """
-variable adjusted_gross_income {
+variable adjusted_gross_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let employee_income = wages + salaries + tips
     let investment_income = interest_income + dividend_income + capital_gains
     return employee_income + self_employment_income + investment_income + other_income
-  }
-}
+
 """
 
     def _execute_js(self, js_code: str, inputs: dict) -> float:
@@ -266,17 +264,16 @@ class TestAGIPythonExecution:
     def agi_dsl(self) -> str:
         """Simplified AGI DSL for testing calculations."""
         return """
-variable adjusted_gross_income {
+variable adjusted_gross_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let employee_income = wages + salaries + tips
     let investment_income = interest_income + dividend_income + capital_gains
     return employee_income + self_employment_income + investment_income + other_income
-  }
-}
+
 """
 
     def _execute_python(self, py_code: str, inputs: dict) -> np.ndarray:
@@ -314,17 +311,16 @@ class TestAGICrossCompilation:
     def agi_dsl(self) -> str:
         """Simplified AGI DSL for testing."""
         return """
-variable adjusted_gross_income {
+variable adjusted_gross_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let employee_income = wages + salaries + tips
     let investment_income = interest_income + dividend_income + capital_gains
     return employee_income + self_employment_income + investment_income + other_income
-  }
-}
+
 """
 
     def _execute_js(self, js_code: str, inputs: dict) -> float:

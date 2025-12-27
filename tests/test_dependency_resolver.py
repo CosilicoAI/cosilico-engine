@@ -25,17 +25,15 @@ class TestDependencyGraph:
         from src.cosilico.dependency_resolver import extract_dependencies
 
         code = """
-references {
+references:
   earned_income: statute/26/32/c/2/A/earned_income
   filing_status: statute/26/1/filing_status
-}
 
-variable credit {
+variable credit:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return earned_income * 0.1 }
-}
+  formula: return earned_income * 0.1 }
 """
         module = parse_dsl(code)
         deps = extract_dependencies(module)
@@ -48,12 +46,11 @@ variable credit {
         from src.cosilico.dependency_resolver import extract_dependencies
 
         code = """
-variable simple {
+variable simple:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return income * 0.1 }
-}
+  formula: return income * 0.1 }
 """
         module = parse_dsl(code)
         deps = extract_dependencies(module)
@@ -114,14 +111,13 @@ class TestModuleResolver:
             root_dir = Path(tmpdir)
             # Create nested structure with statute/ prefix
             (root_dir / "statute/26/32/c/2/A").mkdir(parents=True)
-            earned_income_file = root_dir / "statute/26/32/c/2/A/earned_income.cosilico"
+            earned_income_file = root_dir / "statute/26/32/c/2/A/earned_income.rac"
             earned_income_file.write_text("""
-variable earned_income {
+variable earned_income:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return wages + self_employment_income }
-}
+  formula: return wages + self_employment_income }
 """)
 
             resolver = ModuleResolver(statute_root=root_dir)
@@ -157,41 +153,36 @@ class TestDependencyResolver:
             (root_dir / "statute/26/61/a").mkdir(parents=True)
 
             # wages (no deps)
-            (root_dir / "statute/26/61/a/wages.cosilico").write_text("""
-variable wages {
+            (root_dir / "statute/26/61/a/wages.rac").write_text("""
+variable wages:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return wage_salary_income }
-}
+  formula: return wage_salary_income }
 """)
 
             # earned_income (depends on wages)
-            (root_dir / "statute/26/32/c/2/A/earned_income.cosilico").write_text("""
-references {
+            (root_dir / "statute/26/32/c/2/A/earned_income.rac").write_text("""
+references:
   wages: statute/26/61/a/wages
-}
 
-variable earned_income {
+variable earned_income:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return wages + self_employment_income }
-}
+  formula: return wages + self_employment_income }
 """)
 
             # credit (depends on earned_income)
-            (root_dir / "statute/26/32/a/credit.cosilico").write_text("""
-references {
+            (root_dir / "statute/26/32/a/credit.rac").write_text("""
+references:
   earned_income: statute/26/32/c/2/A/earned_income
-}
 
-variable credit {
+variable credit:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return earned_income * 0.1 }
-}
+  formula: return earned_income * 0.1 }
 """)
 
             resolver = DependencyResolver(statute_root=root_dir)
@@ -223,26 +214,23 @@ class TestExecutorWithDependencies:
             (root_dir / "statute/income").mkdir(parents=True)
             (root_dir / "statute/credit").mkdir(parents=True)
 
-            (root_dir / "statute/income/earned.cosilico").write_text("""
-variable earned_income {
+            (root_dir / "statute/income/earned.rac").write_text("""
+variable earned_income:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return wages }
-}
+  formula: return wages }
 """)
 
-            (root_dir / "statute/credit/eitc.cosilico").write_text("""
-references {
+            (root_dir / "statute/credit/eitc.rac").write_text("""
+references:
   earned_income: statute/income/earned
-}
 
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
-  formula { return earned_income * 0.1 }
-}
+  formula: return earned_income * 0.1 }
 """)
 
             # Resolve dependencies

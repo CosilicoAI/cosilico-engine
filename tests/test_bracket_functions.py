@@ -7,7 +7,7 @@ These functions handle common tax/benefit patterns:
 
 import pytest
 import numpy as np
-from cosilico.brackets import cut, marginal_agg
+from src.cosilico.brackets import cut, marginal_agg
 
 
 class TestCut:

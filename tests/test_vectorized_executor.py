@@ -301,15 +301,14 @@ class TestVectorizedExecutor:
     def test_simple_formula(self):
         """Execute simple formula."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"income": np.array([10000, 20000, 30000])}
@@ -321,15 +320,14 @@ variable tax {
     def test_formula_with_max(self):
         """Formula using max function."""
         code = """
-variable credit {
+variable credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return max(0, 1000 - income * 0.1)
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"income": np.array([5000, 10000, 15000])}
@@ -341,15 +339,14 @@ variable credit {
     def test_formula_with_min(self):
         """Formula using min function."""
         code = """
-variable capped_income {
+variable capped_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return min(income, 50000)
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"income": np.array([30000, 50000, 70000])}
@@ -360,17 +357,16 @@ variable capped_income {
     def test_formula_with_let_binding(self):
         """Formula with let bindings."""
         code = """
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let phase_in = income * 0.34
     let max_credit = 6960
     return min(phase_in, max_credit)
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"income": np.array([10000, 20000, 30000])}
@@ -380,17 +376,16 @@ variable eitc {
         assert_array_almost_equal(results["eitc"], [3400, 6800, 6960])
 
     def test_conditional_formula(self):
-        """Formula with if/then/else."""
+        """Formula with if/else expression."""
         code = """
-variable benefit {
+variable benefit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    if income < 20000 then 1000 else 0
-  }
-}
+  formula:
+    if income < 20000: 1000 else 0
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"income": np.array([15000, 20000, 25000])}
@@ -401,15 +396,14 @@ variable benefit {
     def test_scenario_caching(self):
         """Scenario caches computed results."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"income": np.array([10000, 20000])}
@@ -426,25 +420,23 @@ variable tax {
     def test_multiple_variables(self):
         """Execute multiple dependent variables."""
         code = """
-variable gross_income {
+variable gross_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return wages + interest
-  }
-}
 
-variable tax {
+
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return gross_income * 0.25
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {
@@ -463,17 +455,16 @@ class TestEITCCalculation:
     def test_eitc_phase_in(self):
         """EITC phase-in calculation."""
         code = """
-variable eitc_phase_in {
+variable eitc_phase_in:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.34
     let cap = 11750
     return rate * min(earned_income, cap)
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"earned_income": np.array([5000, 11750, 20000])}
@@ -487,16 +478,15 @@ variable eitc_phase_in {
     def test_eitc_with_children_index(self):
         """EITC with indexed parameters by number of children."""
         code = """
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = credit_rate[count_children]
     return earned_income * rate
-  }
-}
+
 """
         executor = VectorizedExecutor(
             parameters={"credit_rate": {0: 0.0765, 1: 0.34, 2: 0.40, 3: 0.45}}
@@ -519,15 +509,14 @@ class TestPerformance:
     def test_million_entities_under_10ms(self):
         """1M entities should execute in under 10ms for simple formula."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return max(0, income * 0.25 - 1000)
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"income": np.random.uniform(0, 100000, 1_000_000)}
@@ -546,21 +535,19 @@ class TestEnumSupport:
     def test_enum_comparison_without_quotes(self):
         """Enum values can be used without quotes in comparisons."""
         code = """
-enum FilingStatus {
+enum FilingStatus:
   SINGLE
   JOINT
   HEAD_OF_HOUSEHOLD
-}
 
-variable threshold {
+variable threshold:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if filing_status == JOINT then 250000 else 200000
-  }
-}
+  formula:
+    return if filing_status == JOINT: 250000 else 200000
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"filing_status": np.array(["JOINT", "SINGLE", "JOINT"])}
@@ -572,26 +559,24 @@ variable threshold {
     def test_enum_multiple_values(self):
         """Test multiple enum values in if/else chain."""
         code = """
-enum FilingStatus {
+enum FilingStatus:
   SINGLE
   JOINT
   SEPARATE
   HEAD_OF_HOUSEHOLD
   SURVIVING_SPOUSE
-}
 
-variable niit_threshold {
+variable niit_threshold:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if filing_status == JOINT then 250000
-      else if filing_status == SURVIVING_SPOUSE then 250000
-      else if filing_status == SEPARATE then 125000
+  formula:
+    return if filing_status == JOINT: 250000
+      else if filing_status == SURVIVING_SPOUSE: 250000
+      else if filing_status == SEPARATE: 125000
       else 200000
-  }
-}
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {
@@ -609,17 +594,18 @@ variable niit_threshold {
     def test_string_literals_still_work(self):
         """String literals continue to work alongside enum support."""
         code = """
-enum FilingStatus { SINGLE JOINT }
+enum FilingStatus:
+  SINGLE
+  JOINT
 
-variable threshold {
+variable threshold:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if filing_status == "JOINT" then 250000 else 200000
-  }
-}
+  formula:
+    return if filing_status == "JOINT": 250000 else 200000
+
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"filing_status": np.array(["JOINT", "SINGLE"])}
@@ -634,12 +620,12 @@ class TestMatchExpression:
     def test_match_on_value(self):
         """Match expression should compare against the match value."""
         code = """
-variable test_rate {
+variable test_rate:
   entity TaxUnit
   period Year
   dtype Rate
 
-  formula {
+  formula:
     let n_children = min(num_qualifying_children, 3)
     return match n_children {
       case 0 => 0.0765
@@ -647,8 +633,6 @@ variable test_rate {
       case 2 => 0.40
       case 3 => 0.45
     }
-  }
-}
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"num_qualifying_children": np.array([2, 0, 1, 3])}
@@ -663,19 +647,17 @@ variable test_rate {
     def test_match_with_else(self):
         """Match expression with else clause for unmatched values."""
         code = """
-variable category {
+variable category:
   entity TaxUnit
   period Year
   dtype Rate
 
-  formula {
+  formula:
     return match count {
       case 0 => 1.0
       case 1 => 2.0
       else => 9.0
     }
-  }
-}
 """
         executor = VectorizedExecutor(parameters={})
         inputs = {"count": np.array([0, 1, 5, 100])}

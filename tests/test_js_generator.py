@@ -27,15 +27,14 @@ class TestJSGeneratorBasic:
     def test_literal_number(self):
         """Generate code for numeric literal."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return 42
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "42" in js
@@ -44,15 +43,14 @@ variable tax {
     def test_literal_boolean_true(self):
         """Generate code for boolean true."""
         code = """
-variable flag {
+variable flag:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return true
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "true" in js
@@ -60,15 +58,14 @@ variable flag {
     def test_literal_boolean_false(self):
         """Generate code for boolean false."""
         code = """
-variable flag {
+variable flag:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return false
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "false" in js
@@ -76,15 +73,14 @@ variable flag {
     def test_simple_arithmetic(self):
         """Generate code for arithmetic operations."""
         code = """
-variable result {
+variable result:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "*" in js
@@ -97,15 +93,14 @@ class TestJSGeneratorOperators:
     def test_addition(self):
         """Generate code for addition."""
         code = """
-variable sum {
+variable sum:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a + b
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "+" in js
@@ -113,15 +108,14 @@ variable sum {
     def test_subtraction(self):
         """Generate code for subtraction."""
         code = """
-variable diff {
+variable diff:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a - b
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "-" in js
@@ -129,15 +123,14 @@ variable diff {
     def test_multiplication(self):
         """Generate code for multiplication."""
         code = """
-variable product {
+variable product:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a * b
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "*" in js
@@ -145,15 +138,14 @@ variable product {
     def test_division(self):
         """Generate code for division."""
         code = """
-variable quotient {
+variable quotient:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a / b
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "/" in js
@@ -161,15 +153,14 @@ variable quotient {
     def test_comparison_operators(self):
         """Generate code for comparison operators."""
         code = """
-variable cmp {
+variable cmp:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return a < b and c > d and e <= f and g >= h and i == j and k != l
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "<" in js
@@ -182,15 +173,14 @@ variable cmp {
     def test_logical_and(self):
         """Generate code for logical AND."""
         code = """
-variable both {
+variable both:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return a and b
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "&&" in js
@@ -198,15 +188,14 @@ variable both {
     def test_logical_or(self):
         """Generate code for logical OR."""
         code = """
-variable either {
+variable either:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return a or b
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "||" in js
@@ -214,15 +203,14 @@ variable either {
     def test_logical_not(self):
         """Generate code for logical NOT."""
         code = """
-variable negated {
+variable negated:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return not a
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "!" in js
@@ -234,15 +222,14 @@ class TestJSGeneratorConditionals:
     def test_if_then_else(self):
         """Generate code for if/then/else."""
         code = """
-variable benefit {
+variable benefit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if income < 20000 then 1000 else 0
-  }
-}
+  formula:
+    return if income < 20000: 1000 else 0
+
 """
         js = generate_js(parse_dsl(code))
         # Should generate ternary operator
@@ -252,15 +239,14 @@ variable benefit {
     def test_nested_if(self):
         """Generate code for nested conditionals."""
         code = """
-variable rate {
+variable rate:
   entity TaxUnit
   period Year
   dtype Rate
 
-  formula {
-    return if income < 10000 then 0.10 else if income < 40000 then 0.22 else 0.32
-  }
-}
+  formula:
+    return if income < 10000: 0.10 else if income < 40000: 0.22 else 0.32
+
 """
         js = generate_js(parse_dsl(code))
         # Should have two ternary operators
@@ -273,15 +259,14 @@ class TestJSGeneratorFunctions:
     def test_min_function(self):
         """Generate code for min()."""
         code = """
-variable capped {
+variable capped:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return min(income, 100000)
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "Math.min" in js
@@ -289,15 +274,14 @@ variable capped {
     def test_max_function(self):
         """Generate code for max()."""
         code = """
-variable floor {
+variable floor:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return max(income, 0)
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "Math.max" in js
@@ -305,15 +289,14 @@ variable floor {
     def test_nested_functions(self):
         """Generate code for nested function calls."""
         code = """
-variable clamped {
+variable clamped:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return min(max(income, 0), 100000)
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "Math.min" in js
@@ -326,16 +309,15 @@ class TestJSGeneratorLetBindings:
     def test_single_let(self):
         """Generate code for single let binding."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.25
     return income * rate
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "const rate" in js or "let rate" in js
@@ -344,17 +326,16 @@ variable tax {
     def test_multiple_lets(self):
         """Generate code for multiple let bindings."""
         code = """
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.34
     let cap = 6960
     return min(income * rate, cap)
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "rate" in js
@@ -369,19 +350,17 @@ class TestJSGeneratorMatch:
     def test_match_expression(self):
         """Generate code for match expression."""
         code = """
-variable deduction {
+variable deduction:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return match {
       case filing_status == "SINGLE" => 14600
       case filing_status == "JOINT" => 29200
       else => 0
     }
-  }
-}
 """
         js = generate_js(parse_dsl(code))
         # Match should become chained ternaries or switch
@@ -395,15 +374,14 @@ class TestJSGeneratorModule:
     def test_generates_function(self):
         """Generated code should be a callable function."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         # Should export a function
@@ -412,25 +390,23 @@ variable tax {
     def test_multiple_variables(self):
         """Generate code for multiple variables."""
         code = """
-variable gross_income {
+variable gross_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return wages + interest
-  }
-}
 
-variable tax {
+
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return gross_income * 0.25
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         assert "gross_income" in js
@@ -439,25 +415,23 @@ variable tax {
     def test_variable_dependencies(self):
         """Variables can reference other variables."""
         code = """
-variable a {
+variable a:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return input_value * 2
-  }
-}
 
-variable b {
+
+variable b:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a + 100
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
         # b should reference a
@@ -470,15 +444,14 @@ class TestJSGeneratorExecution:
     def test_execute_simple(self):
         """Execute generated JS and verify result."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         js = generate_js(parse_dsl(code))
 
@@ -495,15 +468,14 @@ class TestJSGeneratorTypedArrays:
     def test_vectorized_option(self):
         """Generator can produce vectorized TypedArray code."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         gen = JSGenerator(vectorized=True)
         js = gen.generate(parse_dsl(code))
@@ -517,21 +489,19 @@ class TestJSGeneratorEITC:
     def test_eitc_formula(self):
         """Generate JS for EITC earned_income_credit."""
         code = """
-references {
+references:
   is_eligible: statute/26/32/c/1/A/is_eligible_individual
   initial_credit: statute/26/32/a/2/A/initial_credit_amount
   reduction: statute/26/32/a/2/B/credit_reduction_amount
-}
 
-variable earned_income_credit {
+variable earned_income_credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    if not is_eligible then 0 else max(0, initial_credit - reduction)
-  }
-}
+  formula:
+    if not is_eligible: 0 else max(0, initial_credit - reduction)
+
 """
         js = generate_js(parse_dsl(code))
         assert "is_eligible" in js

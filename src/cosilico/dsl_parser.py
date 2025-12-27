@@ -1,6 +1,6 @@
 """Cosilico DSL Parser.
 
-Parses .cosilico files according to the DSL specification in docs/DSL.md.
+Parses .rac files according to the DSL specification in docs/DSL.md.
 This is a recursive descent parser that produces an AST.
 """
 
@@ -37,6 +37,7 @@ class TokenType(Enum):
     IF = "if"
     # THEN removed - using COLON for Python-style syntax
     ELSE = "else"
+    ELIF = "elif"
     MATCH = "match"
     CASE = "case"
     AND = "and"
@@ -231,6 +232,7 @@ Expression = Union[
 @dataclass
 class FormulaBlock:
     bindings: list[LetBinding]
+    guards: list[tuple]  # List of (condition, return_value) tuples for if-guards
     return_expr: Expression
 
 
@@ -273,7 +275,7 @@ class Lexer:
         "module", "version", "jurisdiction", "import", "imports", "references", "parameters", "variable", "enum",
         "entity", "period", "dtype", "label", "description",
         "unit", "formula", "defined_for", "default", "private", "internal",
-        "let", "return", "if", "else", "match", "case",
+        "let", "return", "if", "elif", "else", "match", "case",
         "and", "or", "not", "true", "false",
     }
 
@@ -296,7 +298,7 @@ class Lexer:
             if ch == '"':
                 self._read_string()
             # Numbers
-            elif ch.isdigit() or (ch == '-' and self._peek(1).isdigit()):
+            elif ch.isdigit():
                 self._read_number()
             # Identifiers and keywords (including § for statute section references)
             elif ch.isalpha() or ch == '_' or ch == '§':
@@ -715,6 +717,9 @@ class Parser:
                     parts.append(self._advance().value)
                 elif self._check(TokenType.NUMBER):
                     parts.append(str(self._advance().value))
+                    # Handle cases like "25A" tokenized as NUMBER then IDENTIFIER
+                    if self._check(TokenType.IDENTIFIER):
+                        parts.append(self._advance().value)
                 elif any(self._check(kw) for kw in path_keywords):
                     parts.append(self._advance().value)
                 else:
@@ -727,7 +732,7 @@ class Parser:
                     self._advance()
                     parts.append(".")
             elif self._check(TokenType.HASH):
-                # Fragment identifier like path#fragment
+                # Fragment identifier like path#fragment or path#fragment.subpath or path#fragment/subpath
                 self._advance()
                 parts.append("#")
                 # Fragment name must be identifier or keyword
@@ -735,7 +740,18 @@ class Parser:
                     parts.append(self._advance().value)
                 elif any(self._check(kw) for kw in path_keywords):
                     parts.append(self._advance().value)
-                # Fragment is the end of the path
+                # After fragment, can have dot or slash-separated subpath
+                while self._check(TokenType.DOT) or self._check(TokenType.SLASH):
+                    sep = self._advance().value
+                    parts.append(sep)
+                    if self._check(TokenType.IDENTIFIER):
+                        parts.append(self._advance().value)
+                    elif self._check(TokenType.NUMBER):
+                        parts.append(str(self._advance().value))
+                    elif any(self._check(kw) for kw in path_keywords):
+                        parts.append(self._advance().value)
+                    else:
+                        break
                 break
             else:
                 break
@@ -907,6 +923,26 @@ class Parser:
                         else_branch=self._wrap_bindings_as_expr(rest_bindings, rest_expr)
                     )
                     break
+            elif self._check(TokenType.ELIF):
+                # elif in statement context - parse as another if-return
+                if_expr = self._parse_statement_elif()
+                if if_expr is not None:
+                    early_return_condition = if_expr.condition
+                    early_return_value = if_expr.then_branch
+                    rest_bindings, rest_expr = self._parse_rest_of_formula(end_keywords)
+                    return_expr = IfExpr(
+                        condition=early_return_condition,
+                        then_branch=early_return_value,
+                        else_branch=self._wrap_bindings_as_expr(rest_bindings, rest_expr)
+                    )
+                    break
+            elif self._check(TokenType.ELSE):
+                # Standalone else: after an if statement
+                # Skip 'else' and optional ':'
+                self._advance()
+                if self._check(TokenType.COLON):
+                    self._advance()
+                # Continue parsing - the else body follows
             elif self._check(TokenType.IDENTIFIER):
                 # Could be assignment: name = expr
                 if self._peek_next_is(TokenType.EQUALS):
@@ -924,7 +960,7 @@ class Parser:
                 return_expr = self._parse_expression()
                 break
 
-        return FormulaBlock(bindings=bindings, return_expr=return_expr)
+        return FormulaBlock(bindings=bindings, guards=[], return_expr=return_expr)
 
     def _parse_statement_if(self) -> Optional[IfExpr]:
         """Parse statement-level if: 'if condition:' followed by 'return value'.
@@ -944,8 +980,31 @@ class Parser:
         else:
             # This is an expression-level if, parse as normal
             then_branch = self._parse_expression()
-            self._consume(TokenType.ELSE, "Expected 'else'")
-            else_branch = self._parse_expression()
+            # Check for elif chain
+            if self._check(TokenType.ELIF):
+                else_branch = self._parse_elif_chain()
+            else:
+                self._consume(TokenType.ELSE, "Expected 'else'")
+                else_branch = self._parse_expression()
+            return IfExpr(condition=condition, then_branch=then_branch, else_branch=else_branch)
+
+    def _parse_statement_elif(self) -> Optional[IfExpr]:
+        """Parse statement-level elif: 'elif condition:' followed by 'return value'."""
+        self._consume(TokenType.ELIF, "Expected 'elif'")
+        condition = self._parse_expression()
+        self._consume(TokenType.COLON, "Expected ':' after elif condition")
+
+        if self._check(TokenType.RETURN):
+            self._advance()
+            then_value = self._parse_expression()
+            return IfExpr(condition=condition, then_branch=then_value, else_branch=Literal(value=0, dtype="number"))
+        else:
+            then_branch = self._parse_expression()
+            if self._check(TokenType.ELIF):
+                else_branch = self._parse_elif_chain()
+            else:
+                self._consume(TokenType.ELSE, "Expected 'else'")
+                else_branch = self._parse_expression()
             return IfExpr(condition=condition, then_branch=then_branch, else_branch=else_branch)
 
     def _parse_rest_of_formula(self, end_keywords: set) -> tuple[list[LetBinding], Optional[Expression]]:
@@ -963,6 +1022,37 @@ class Parser:
                 self._advance()
                 return_expr = self._parse_expression()
                 break
+            elif self._check(TokenType.IF):
+                # Another if-return statement, parse recursively
+                if_expr = self._parse_statement_if()
+                if if_expr is not None:
+                    early_return_condition = if_expr.condition
+                    early_return_value = if_expr.then_branch
+                    rest_bindings, rest_expr = self._parse_rest_of_formula(end_keywords)
+                    return_expr = IfExpr(
+                        condition=early_return_condition,
+                        then_branch=early_return_value,
+                        else_branch=self._wrap_bindings_as_expr(rest_bindings, rest_expr)
+                    )
+                    break
+            elif self._check(TokenType.ELIF):
+                # elif in remaining formula
+                if_expr = self._parse_statement_elif()
+                if if_expr is not None:
+                    early_return_condition = if_expr.condition
+                    early_return_value = if_expr.then_branch
+                    rest_bindings, rest_expr = self._parse_rest_of_formula(end_keywords)
+                    return_expr = IfExpr(
+                        condition=early_return_condition,
+                        then_branch=early_return_value,
+                        else_branch=self._wrap_bindings_as_expr(rest_bindings, rest_expr)
+                    )
+                    break
+            elif self._check(TokenType.ELSE):
+                # Standalone else - skip and continue
+                self._advance()
+                if self._check(TokenType.COLON):
+                    self._advance()
             elif self._check(TokenType.IDENTIFIER):
                 if self._peek_next_is(TokenType.EQUALS):
                     name = self._advance().value
@@ -995,12 +1085,12 @@ class Parser:
 
         # Create a simplified representation using FormulaBlock
         # The executor will need to handle this appropriately
-        return FormulaBlock(bindings=bindings, return_expr=return_expr)
+        return FormulaBlock(bindings=bindings, guards=[], return_expr=return_expr)
 
     def _parse_variable(self) -> VariableDef:
         self._consume(TokenType.VARIABLE, "Expected 'variable'")
         name = self._consume(TokenType.IDENTIFIER, "Expected variable name").value
-        self._consume(TokenType.LBRACE, "Expected '{'")
+        self._consume(TokenType.COLON, "Expected ':' after variable name")
 
         var = VariableDef(
             name=name,
@@ -1009,7 +1099,15 @@ class Parser:
             dtype="",
         )
 
-        while not self._check(TokenType.RBRACE) and not self._is_at_end():
+        # Parse until we hit a non-indented line or end of file
+        # For now, parse until we see another top-level keyword or EOF
+        while not self._is_at_end():
+            # Check for end of variable block (next top-level element)
+            if self._check(TokenType.VARIABLE) or self._check(TokenType.ENUM) or \
+               self._check(TokenType.MODULE) or self._check(TokenType.IMPORTS) or \
+               self._check(TokenType.REFERENCES) or self._check(TokenType.PARAMETERS):
+                break
+
             if self._check(TokenType.ENTITY):
                 self._advance()
                 var.entity = self._consume(TokenType.IDENTIFIER, "Expected entity type").value
@@ -1030,26 +1128,28 @@ class Parser:
                 var.unit = self._consume(TokenType.STRING, "Expected unit string").value
             elif self._check(TokenType.FORMULA):
                 self._advance()
-                self._consume(TokenType.LBRACE, "Expected '{'")
-                var.formula = self._parse_formula_block()
-                self._consume(TokenType.RBRACE, "Expected '}'")
+                self._consume(TokenType.COLON, "Expected ':' after formula")
+                var.formula = self._parse_formula_block_indent()
+                break  # Formula is typically last
             elif self._check(TokenType.DEFINED_FOR):
                 self._advance()
-                self._consume(TokenType.LBRACE, "Expected '{'")
+                self._consume(TokenType.COLON, "Expected ':' after defined_for")
                 var.defined_for = self._parse_expression()
-                self._consume(TokenType.RBRACE, "Expected '}'")
             elif self._check(TokenType.DEFAULT):
                 self._advance()
                 var.default = self._parse_literal_value()
-            else:
-                # Strict mode: error on unknown fields
-                token = self._peek()
+            elif self._check(TokenType.IDENTIFIER):
+                # Unknown field - raise helpful error
+                unknown = self._peek().value
+                valid_fields = ["entity", "period", "dtype", "label", "description", "unit", "formula", "defined_for", "default"]
                 raise SyntaxError(
-                    f"Unknown field '{token.value}' in variable definition at line {token.line}. "
-                    f"Valid fields: entity, period, dtype, label, description, unit, formula, defined_for, default"
+                    f"Unknown field '{unknown}' in variable definition at line {self._peek().line}. "
+                    f"Valid fields: {', '.join(valid_fields)}"
                 )
+            else:
+                # End of variable block
+                break
 
-        self._consume(TokenType.RBRACE, "Expected '}'")
         return var
 
     def _parse_dtype(self) -> str:
@@ -1065,14 +1165,65 @@ class Parser:
     def _parse_enum(self) -> EnumDef:
         self._consume(TokenType.ENUM, "Expected 'enum'")
         name = self._consume(TokenType.IDENTIFIER, "Expected enum name").value
-        self._consume(TokenType.LBRACE, "Expected '{'")
+        self._consume(TokenType.COLON, "Expected ':' after enum name")
 
         values = []
-        while not self._check(TokenType.RBRACE) and not self._is_at_end():
-            values.append(self._consume(TokenType.IDENTIFIER, "Expected enum value").value)
+        # Parse enum values until we hit a non-enum token
+        while not self._is_at_end():
+            if self._check(TokenType.IDENTIFIER):
+                values.append(self._advance().value)
+            elif self._check(TokenType.VARIABLE) or self._check(TokenType.ENUM) or \
+                 self._check(TokenType.MODULE) or self._check(TokenType.ENTITY) or \
+                 self._check(TokenType.IMPORTS) or self._check(TokenType.REFERENCES):
+                break
+            else:
+                break
 
-        self._consume(TokenType.RBRACE, "Expected '}'")
         return EnumDef(name=name, values=values)
+
+    def _parse_formula_block_indent(self) -> FormulaBlock:
+        """Parse indented formula block (Python-style, no braces)."""
+        bindings = []
+        guards = []
+        return_expr = None
+
+        # Parse until we see a non-indented line or top-level keyword
+        while not self._is_at_end():
+            # Check for end of formula block
+            if self._check(TokenType.VARIABLE) or self._check(TokenType.ENUM) or \
+               self._check(TokenType.MODULE) or self._check(TokenType.ENTITY) or \
+               self._check(TokenType.PERIOD) or self._check(TokenType.DTYPE) or \
+               self._check(TokenType.IMPORTS) or self._check(TokenType.REFERENCES) or \
+               self._check(TokenType.LABEL) or self._check(TokenType.DESCRIPTION) or \
+               self._check(TokenType.DEFAULT):
+                break
+
+            if self._check(TokenType.LET):
+                bindings.append(self._parse_let_binding())
+            elif self._check(TokenType.IF):
+                # Check if this is an if-guard or an if-expression
+                guard = self._try_parse_if_guard()
+                if guard:
+                    guards.append(guard)
+                else:
+                    # It's an if-expression, parse as return expression
+                    return_expr = self._parse_expression()
+                    break
+            elif self._check(TokenType.RETURN):
+                self._advance()
+                return_expr = self._parse_expression()
+            else:
+                # Unknown token, end of block
+                break
+
+        # Build nested if-else from guards and final return
+        if guards and return_expr:
+            result = return_expr
+            for condition, guard_value in reversed(guards):
+                result = IfExpr(condition=condition, then_branch=guard_value, else_branch=result)
+            return_expr = result
+
+        return FormulaBlock(bindings=bindings, guards=[], return_expr=return_expr)
 
     def _parse_formula_block(self) -> FormulaBlock:
         bindings = []
@@ -1112,7 +1263,7 @@ class Parser:
                 result = IfExpr(condition=condition, then_branch=guard_value, else_branch=result)
             return_expr = result
 
-        return FormulaBlock(bindings=bindings, return_expr=return_expr)
+        return FormulaBlock(bindings=bindings, guards=[], return_expr=return_expr)
 
     def _try_parse_if_guard(self) -> tuple | None:
         """Try to parse an if-guard statement: if <cond>: return <expr>
@@ -1265,6 +1416,26 @@ class Parser:
             name = self._advance().value  # "variable"
             return self._parse_function_call(name)
 
+        # Special handling for 'parameters' keyword used as variable (e.g., parameters.lifeline.fpg_limit)
+        if self._check(TokenType.PARAMETERS) and self._peek_next_is(TokenType.DOT):
+            name = self._advance().value  # "parameters"
+            # Parse dotted access
+            while self._check(TokenType.DOT):
+                self._advance()
+                if self._check(TokenType.IDENTIFIER):
+                    name += "." + self._advance().value
+                elif self._check(TokenType.NUMBER):
+                    name += "." + str(self._advance().value)
+                else:
+                    break
+            # Check for indexing: parameters.rates[n]
+            if self._check(TokenType.LBRACKET):
+                self._advance()
+                index = self._parse_expression()
+                self._consume(TokenType.RBRACKET, "Expected ']'")
+                return IndexExpr(base=Identifier(name=name), index=index)
+            return Identifier(name=name)
+
         # Function calls or identifiers
         if self._check(TokenType.IDENTIFIER):
             name = self._advance().value
@@ -1322,12 +1493,41 @@ class Parser:
         return FunctionCall(name=name, args=args)
 
     def _parse_if_expr(self) -> IfExpr:
+        """Parse if/elif/else expression.
+
+        Supports:
+          if cond1: val1 elif cond2: val2 else val3
+          if cond1: val1 else val2
+        """
         self._consume(TokenType.IF, "Expected 'if'")
         condition = self._parse_expression()
         self._consume(TokenType.COLON, "Expected ':' after if condition")
         then_branch = self._parse_expression()
-        self._consume(TokenType.ELSE, "Expected 'else'")
-        else_branch = self._parse_expression()
+
+        # Check for elif chain
+        if self._check(TokenType.ELIF):
+            # Parse elif as a nested if
+            else_branch = self._parse_elif_chain()
+        else:
+            self._consume(TokenType.ELSE, "Expected 'else'")
+            else_branch = self._parse_expression()
+
+        return IfExpr(condition=condition, then_branch=then_branch, else_branch=else_branch)
+
+    def _parse_elif_chain(self) -> IfExpr:
+        """Parse elif/else chain as nested IfExpr."""
+        self._consume(TokenType.ELIF, "Expected 'elif'")
+        condition = self._parse_expression()
+        self._consume(TokenType.COLON, "Expected ':' after elif condition")
+        then_branch = self._parse_expression()
+
+        # Check for more elif or final else
+        if self._check(TokenType.ELIF):
+            else_branch = self._parse_elif_chain()
+        else:
+            self._consume(TokenType.ELSE, "Expected 'else'")
+            else_branch = self._parse_expression()
+
         return IfExpr(condition=condition, then_branch=then_branch, else_branch=else_branch)
 
     def _parse_match_expr(self) -> MatchExpr:
@@ -1384,7 +1584,7 @@ def parse_dsl(source: str) -> Module:
 
 
 def parse_file(filepath: str) -> Module:
-    """Parse a .cosilico file."""
+    """Parse a .rac file."""
     with open(filepath, 'r') as f:
         source = f.read()
     return parse_dsl(source)

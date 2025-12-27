@@ -5,8 +5,8 @@ All other values must come from parameters.
 """
 
 import pytest
-from cosilico.dsl_parser import parse_dsl
-from cosilico.validation.literals import validate_numeric_literals, NumericLiteralError
+from src.cosilico.dsl_parser import parse_dsl
+from src.cosilico.validation.literals import validate_numeric_literals, NumericLiteralError
 
 
 class TestNumericLiteralValidation:

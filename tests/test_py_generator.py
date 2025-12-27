@@ -53,15 +53,14 @@ class TestPyGeneratorBasic:
     def test_literal_number(self):
         """Generate code for numeric literal."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return 42
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "42" in py
@@ -70,15 +69,14 @@ variable tax {
     def test_literal_boolean_true(self):
         """Generate code for boolean true."""
         code = """
-variable flag {
+variable flag:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return true
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "True" in py  # Python uses True, not true
@@ -86,15 +84,14 @@ variable flag {
     def test_literal_boolean_false(self):
         """Generate code for boolean false."""
         code = """
-variable flag {
+variable flag:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return false
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "False" in py  # Python uses False, not false
@@ -102,15 +99,14 @@ variable flag {
     def test_simple_arithmetic(self):
         """Generate code for arithmetic operations."""
         code = """
-variable result {
+variable result:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "*" in py
@@ -123,15 +119,14 @@ class TestPyGeneratorOperators:
     def test_addition(self):
         """Generate code for addition."""
         code = """
-variable sum {
+variable sum:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a + b
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "+" in py
@@ -139,15 +134,14 @@ variable sum {
     def test_subtraction(self):
         """Generate code for subtraction."""
         code = """
-variable diff {
+variable diff:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a - b
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "-" in py
@@ -155,15 +149,14 @@ variable diff {
     def test_multiplication(self):
         """Generate code for multiplication."""
         code = """
-variable product {
+variable product:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a * b
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "*" in py
@@ -171,15 +164,14 @@ variable product {
     def test_division(self):
         """Generate code for division."""
         code = """
-variable quotient {
+variable quotient:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return a / b
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "/" in py
@@ -187,15 +179,14 @@ variable quotient {
     def test_comparison_operators(self):
         """Generate code for comparison operators."""
         code = """
-variable cmp {
+variable cmp:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return a < b and c > d and e <= f and g >= h and i == j and k != l
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "<" in py
@@ -208,15 +199,14 @@ variable cmp {
     def test_logical_and(self):
         """Generate code for logical AND."""
         code = """
-variable both {
+variable both:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return a and b
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         # Python uses & for vectorized and
@@ -225,15 +215,14 @@ variable both {
     def test_logical_or(self):
         """Generate code for logical OR."""
         code = """
-variable either {
+variable either:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return a or b
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         # Python uses | for vectorized or
@@ -242,15 +231,14 @@ variable either {
     def test_logical_not(self):
         """Generate code for logical NOT."""
         code = """
-variable negated {
+variable negated:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return not a
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         # Python uses ~ for vectorized not
@@ -263,15 +251,14 @@ class TestPyGeneratorConditionals:
     def test_if_then_else(self):
         """Generate code for if/then/else."""
         code = """
-variable benefit {
+variable benefit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if income < 20000 then 1000 else 0
-  }
-}
+  formula:
+    return if income < 20000: 1000 else 0
+
 """
         py = generate_python(parse_dsl(code))
         # Should generate np.where for vectorized conditionals
@@ -280,15 +267,14 @@ variable benefit {
     def test_nested_if(self):
         """Generate code for nested conditionals."""
         code = """
-variable rate {
+variable rate:
   entity TaxUnit
   period Year
   dtype Rate
 
-  formula {
-    return if income < 10000 then 0.10 else if income < 40000 then 0.22 else 0.32
-  }
-}
+  formula:
+    return if income < 10000: 0.10 else if income < 40000: 0.22 else 0.32
+
 """
         py = generate_python(parse_dsl(code))
         # Should have nested np.where calls
@@ -301,15 +287,14 @@ class TestPyGeneratorFunctions:
     def test_min_function(self):
         """Generate code for min()."""
         code = """
-variable capped {
+variable capped:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return min(income, 100000)
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "np.minimum" in py
@@ -317,15 +302,14 @@ variable capped {
     def test_max_function(self):
         """Generate code for max()."""
         code = """
-variable floor {
+variable floor:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return max(income, 0)
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "np.maximum" in py
@@ -333,15 +317,14 @@ variable floor {
     def test_nested_functions(self):
         """Generate code for nested function calls."""
         code = """
-variable clamped {
+variable clamped:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return min(max(income, 0), 100000)
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "np.minimum" in py
@@ -354,16 +337,15 @@ class TestPyGeneratorLetBindings:
     def test_single_let(self):
         """Generate code for single let binding."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.25
     return income * rate
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "rate" in py
@@ -372,17 +354,16 @@ variable tax {
     def test_multiple_lets(self):
         """Generate code for multiple let bindings."""
         code = """
-variable eitc {
+variable eitc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.34
     let cap = 6960
     return min(income * rate, cap)
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "rate" in py
@@ -397,19 +378,17 @@ class TestPyGeneratorMatch:
     def test_match_expression(self):
         """Generate code for match expression."""
         code = """
-variable deduction {
+variable deduction:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return match {
       case filing_status == "SINGLE" => 14600
       case filing_status == "JOINT" => 29200
       else => 0
     }
-  }
-}
 """
         py = generate_python(parse_dsl(code))
         # Match should become chained np.where
@@ -424,15 +403,14 @@ class TestPyGeneratorModule:
     def test_generates_function(self):
         """Generated code should be a callable function."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         # Should define a function
@@ -441,25 +419,23 @@ variable tax {
     def test_multiple_variables(self):
         """Generate code for multiple variables."""
         code = """
-variable gross_income {
+variable gross_income:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return wages + interest
-  }
-}
 
-variable tax {
+
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return gross_income * 0.25
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
         assert "def gross_income(" in py
@@ -472,15 +448,14 @@ class TestPyGeneratorExecution:
     def test_execute_simple_scalar(self):
         """Execute generated Python with scalar inputs."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -493,15 +468,14 @@ variable tax {
     def test_execute_simple_vectorized(self):
         """Execute generated Python with array inputs."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -515,15 +489,14 @@ variable tax {
     def test_execute_conditional(self):
         """Execute generated Python with conditionals."""
         code = """
-variable capped_credit {
+variable capped_credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if income < 50000 then income * 0.10 else 5000
-  }
-}
+  formula:
+    return if income < 50000: income * 0.10 else 5000
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -536,17 +509,16 @@ variable capped_credit {
     def test_execute_min_max(self):
         """Execute generated Python with min/max functions."""
         code = """
-variable complex_calc {
+variable complex_calc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let base = income * 0.20
     let cap = 10000
     return min(base, cap)
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -559,15 +531,14 @@ variable complex_calc {
     def test_execute_boolean_ops(self):
         """Execute generated Python with boolean operations."""
         code = """
-variable is_eligible {
+variable is_eligible:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return income > 1000 and income < 50000
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -584,15 +555,14 @@ class TestPyGeneratorMatchesJS:
     def test_arithmetic_matches_js(self):
         """Python arithmetic matches JS results."""
         code = """
-variable simple_tax {
+variable simple_tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -613,15 +583,14 @@ variable simple_tax {
     def test_conditional_matches_js(self):
         """Python conditionals match JS results."""
         code = """
-variable capped_credit {
+variable capped_credit:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
-    return if income < 50000 then income * 0.10 else 5000
-  }
-}
+  formula:
+    return if income < 50000: income * 0.10 else 5000
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -641,17 +610,16 @@ variable capped_credit {
     def test_functions_match_js(self):
         """Python functions match JS results."""
         code = """
-variable complex_calc {
+variable complex_calc:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let base = income * 0.20
     let cap = 10000
     return min(base, cap)
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -675,17 +643,16 @@ class TestPyGeneratorRealWorld:
     def test_eitc_phase_in_formula(self):
         """EITC phase-in calculation."""
         code = """
-variable eitc_phase_in {
+variable eitc_phase_in:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     let rate = 0.34
     let earned_income_cap = 11750
     return min(earned_income, earned_income_cap) * rate
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -704,20 +671,18 @@ variable eitc_phase_in {
     def test_standard_deduction_formula(self):
         """Standard deduction with filing status."""
         code = """
-variable standard_deduction {
+variable standard_deduction:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return match {
       case filing_status == "SINGLE" => 14600
       case filing_status == "JOINT" => 29200
       case filing_status == "HEAD_OF_HOUSEHOLD" => 21900
       else => 14600
     }
-  }
-}
 """
         py = generate_python(parse_dsl(code))
 
@@ -735,15 +700,14 @@ class TestPyGeneratorVectorization:
     def test_broadcasts_scalars(self):
         """Scalar parameters broadcast to array inputs."""
         code = """
-variable tax {
+variable tax:
   entity TaxUnit
   period Year
   dtype Money
 
-  formula {
+  formula:
     return income * 0.25
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 
@@ -757,15 +721,14 @@ variable tax {
     def test_element_wise_comparison(self):
         """Comparisons work element-wise."""
         code = """
-variable threshold_check {
+variable threshold_check:
   entity TaxUnit
   period Year
   dtype Boolean
 
-  formula {
+  formula:
     return income >= threshold
-  }
-}
+
 """
         py = generate_python(parse_dsl(code))
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from cosilico.rl.reward import (
+from src.cosilico.rl.reward import (
     CombinedRewardFunction,
     EncodingRewardFunction,
     Oracle,

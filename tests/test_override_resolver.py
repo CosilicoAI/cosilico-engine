@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from cosilico.parameters.override_resolver import OverrideResolver, create_resolver
+from src.cosilico.parameters.override_resolver import OverrideResolver, create_resolver
 
 
 @pytest.fixture
