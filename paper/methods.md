@@ -131,7 +131,7 @@ Given a fixed architecture, the inner loop encodes a single provision:
 
 ### Claude Agent
 
-We use Claude Sonnet 4 with tool use. The level of agent autonomy varies by provision complexity:
+We use Claude 4.5 models with tool use. The level of agent autonomy varies by provision complexity:
 
 **Level 1 (Simple provisions)** - Minimal agency, all context provided:
 - `execute_dsl`: Run code against test cases
@@ -177,19 +177,28 @@ Beyond the single-agent loop, we introduce a **two-agent collaborative workflow*
 
 The Author operates under "AlphaLaw" constraints—minimal instruction, learning primarily from reward signals. The Evaluator has full access to ground truth for verification.
 
+**Model Choice:**
+
+Both agents use Claude 4.5 models, with flexibility to trade off cost vs. quality:
+- **Haiku 4.5**: Lower cost ($0.80/$4.00 per 1M tokens)
+- **Sonnet 4.5**: Balanced ($3/$15 per 1M tokens)
+- **Opus 4.5**: Highest quality ($15/$75 per 1M tokens)
+
+Default: Sonnet 4.5 for both. We track cost separately to measure cost-effectiveness.
+
 **Collaborative Iteration Cycle:**
 
 ```
 ┌─────────────┐                    ┌─────────────┐
 │   Author    │───── creates PR ──▶│   GitHub    │
-│   (Haiku)   │                    │     PR      │
+│ (4.5 model) │                    │     PR      │
 └─────────────┘                    └──────┬──────┘
                                           │
                     ┌─────────────────────┘
                     ▼
             ┌─────────────┐
             │  Evaluator  │◀──── full oracle access
-            │  (Sonnet)   │
+            │ (4.5 model) │
             └──────┬──────┘
                    │
          ┌─────────▼─────────┐
