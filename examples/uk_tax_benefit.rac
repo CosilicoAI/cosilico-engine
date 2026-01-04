@@ -1,0 +1,212 @@
+# UK Tax-Benefit System 2024-25
+# For scoring policy reforms
+
+entity person:
+    gross_income: float
+    hours_worked: float
+    is_adult: float
+    is_child: float
+
+entity benefit_unit:
+    num_adults: float
+    num_children: float
+    total_earnings: float
+    housing_costs: float
+
+
+# =============================================================================
+# INCOME TAX (Income Tax Act 2007)
+# =============================================================================
+
+variable gov/hmrc/it/personal_allowance:
+    from 2024-04-06: 12570
+
+variable gov/hmrc/it/pa_taper_start:
+    from 2024-04-06: 100000
+
+variable gov/hmrc/it/basic_rate_limit:
+    from 2024-04-06: 37700
+
+variable gov/hmrc/it/higher_rate_limit:
+    from 2024-04-06: 125140
+
+variable gov/hmrc/it/basic_rate:
+    from 2024-04-06: 0.20
+
+variable gov/hmrc/it/higher_rate:
+    from 2024-04-06: 0.40
+
+variable gov/hmrc/it/additional_rate:
+    from 2024-04-06: 0.45
+
+# Tapered personal allowance
+variable person/adjusted_pa:
+    entity: person
+    from 2024-04-06:
+        max(0, gov/hmrc/it/personal_allowance -
+            max(0, gross_income - gov/hmrc/it/pa_taper_start) / 2)
+
+variable person/taxable_income:
+    entity: person
+    from 2024-04-06:
+        max(0, gross_income - person/adjusted_pa)
+
+variable person/income_tax:
+    entity: person
+    from 2024-04-06:
+        min(person/taxable_income, gov/hmrc/it/basic_rate_limit) * gov/hmrc/it/basic_rate +
+        max(0, min(person/taxable_income, gov/hmrc/it/higher_rate_limit - gov/hmrc/it/personal_allowance) - gov/hmrc/it/basic_rate_limit) * gov/hmrc/it/higher_rate +
+        max(0, person/taxable_income - (gov/hmrc/it/higher_rate_limit - gov/hmrc/it/personal_allowance)) * gov/hmrc/it/additional_rate
+
+
+# =============================================================================
+# NATIONAL INSURANCE (Social Security Contributions and Benefits Act 1992)
+# =============================================================================
+
+variable gov/hmrc/nic/primary_threshold:
+    from 2024-04-06: 12570
+
+variable gov/hmrc/nic/upper_earnings_limit:
+    from 2024-04-06: 50270
+
+variable gov/hmrc/nic/main_rate:
+    from 2024-04-06: 0.08
+
+variable gov/hmrc/nic/additional_rate:
+    from 2024-04-06: 0.02
+
+variable person/national_insurance:
+    entity: person
+    from 2024-04-06:
+        max(0, min(gross_income, gov/hmrc/nic/upper_earnings_limit) - gov/hmrc/nic/primary_threshold) * gov/hmrc/nic/main_rate +
+        max(0, gross_income - gov/hmrc/nic/upper_earnings_limit) * gov/hmrc/nic/additional_rate
+
+
+# =============================================================================
+# UNIVERSAL CREDIT (Welfare Reform Act 2012)
+# =============================================================================
+
+variable gov/dwp/uc/standard_single:
+    from 2024-04-06: 393.45
+
+variable gov/dwp/uc/standard_couple:
+    from 2024-04-06: 617.60
+
+variable gov/dwp/uc/child_element_first:
+    from 2024-04-06: 333.33
+
+variable gov/dwp/uc/child_element_other:
+    from 2024-04-06: 287.92
+
+variable gov/dwp/uc/housing_element_cap:
+    from 2024-04-06: 1500.00
+
+variable gov/dwp/uc/work_allowance_housing:
+    from 2024-04-06: 404.00
+
+variable gov/dwp/uc/work_allowance_no_housing:
+    from 2024-04-06: 673.00
+
+variable gov/dwp/uc/taper_rate:
+    from 2024-04-06: 0.55
+
+# Standard allowance based on household composition
+variable benefit_unit/uc_standard:
+    entity: benefit_unit
+    from 2024-04-06:
+        if num_adults >= 2: gov/dwp/uc/standard_couple
+        else: gov/dwp/uc/standard_single
+
+# Child element
+variable benefit_unit/uc_child_element:
+    entity: benefit_unit
+    from 2024-04-06:
+        if num_children >= 1:
+            gov/dwp/uc/child_element_first + max(0, num_children - 1) * gov/dwp/uc/child_element_other
+        else: 0
+
+# Housing element (capped)
+variable benefit_unit/uc_housing_element:
+    entity: benefit_unit
+    from 2024-04-06:
+        min(housing_costs, gov/dwp/uc/housing_element_cap)
+
+# Maximum UC entitlement
+variable benefit_unit/uc_max:
+    entity: benefit_unit
+    from 2024-04-06:
+        benefit_unit/uc_standard + benefit_unit/uc_child_element + benefit_unit/uc_housing_element
+
+# Work allowance (higher if no housing element)
+variable benefit_unit/uc_work_allowance:
+    entity: benefit_unit
+    from 2024-04-06:
+        if housing_costs > 0: gov/dwp/uc/work_allowance_housing
+        else: gov/dwp/uc/work_allowance_no_housing
+
+# Income for UC purposes (after work allowance)
+variable benefit_unit/uc_earned_income:
+    entity: benefit_unit
+    from 2024-04-06:
+        max(0, total_earnings - benefit_unit/uc_work_allowance)
+
+# Final UC payment (after taper)
+variable benefit_unit/universal_credit:
+    entity: benefit_unit
+    from 2024-04-06:
+        max(0, benefit_unit/uc_max - benefit_unit/uc_earned_income * gov/dwp/uc/taper_rate)
+
+
+# =============================================================================
+# CHILD BENEFIT (Child Benefit Act 2005)
+# =============================================================================
+
+variable gov/hmrc/cb/weekly_eldest:
+    from 2024-04-06: 25.60
+
+variable gov/hmrc/cb/weekly_other:
+    from 2024-04-06: 16.95
+
+variable gov/hmrc/cb/hicbc_start:
+    from 2024-04-06: 60000
+
+variable gov/hmrc/cb/hicbc_end:
+    from 2024-04-06: 80000
+
+# Annual child benefit entitlement (monthly)
+variable benefit_unit/child_benefit_gross:
+    entity: benefit_unit
+    from 2024-04-06:
+        if num_children >= 1:
+            (gov/hmrc/cb/weekly_eldest + max(0, num_children - 1) * gov/hmrc/cb/weekly_other) * 52 / 12
+        else: 0
+
+# HICBC taper (applied to highest earner - simplified here as total_earnings)
+variable benefit_unit/hicbc_rate:
+    entity: benefit_unit
+    from 2024-04-06:
+        if total_earnings >= gov/hmrc/cb/hicbc_end: 1
+        else:
+            if total_earnings > gov/hmrc/cb/hicbc_start:
+                (total_earnings - gov/hmrc/cb/hicbc_start) / (gov/hmrc/cb/hicbc_end - gov/hmrc/cb/hicbc_start)
+            else: 0
+
+variable benefit_unit/child_benefit:
+    entity: benefit_unit
+    from 2024-04-06:
+        benefit_unit/child_benefit_gross * (1 - benefit_unit/hicbc_rate)
+
+
+# =============================================================================
+# NET INCOME
+# =============================================================================
+
+variable person/net_income:
+    entity: person
+    from 2024-04-06:
+        gross_income - person/income_tax - person/national_insurance
+
+variable benefit_unit/net_income:
+    entity: benefit_unit
+    from 2024-04-06:
+        total_earnings + benefit_unit/universal_credit + benefit_unit/child_benefit

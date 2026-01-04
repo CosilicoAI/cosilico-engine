@@ -1,50 +1,20 @@
-# RAC (Rules as Code)
+# RAC
 
-Core DSL parser, executor, and vectorized runtime for encoding tax and benefit law.
+Core DSL parser, compiler, and native executor for encoding tax and benefit law.
 
-## ⚠️ CRITICAL: No Country-Specific Rules ⚠️
+## Structure
 
-**This repo contains ONLY the DSL infrastructure. NO statute files.**
-
-Country-specific rules (.rac files) belong in:
-- `rac-us/` - US federal statutes (Title 26 IRC, Title 7 SNAP)
-- `rac-uk/` - UK statutes (future)
-
-This separation has been violated multiple times. DO NOT add statute files here.
-
-## What Belongs Here
-
-- `src/rac/parser.py` - DSL parser
-- `src/rac/executor.py` - Single-case executor
-- `src/rac/vectorized.py` - Microsimulation executor
-- `src/rac/microsim.py` - CPS microdata runner (loads from rac-us)
-- `tests/` - Unit tests with inline test fixtures only
-
-## What Does NOT Belong Here
-
-- `statute/` directory - DELETE if it exists
-- `.rac` files with real statute encodings
-- `parameters.yaml` with real IRS values
+- `src/rac/parser.py` - Lexer and recursive descent parser
+- `src/rac/compiler.py` - Temporal resolution, dependency ordering
+- `src/rac/executor.py` - Pure Python executor (debugging)
+- `src/rac/native.py` - Rust compilation (production)
+- `src/rac/codegen/rust.py` - Rust code generation
+- `examples/` - UK tax-benefit example and reform runner
 
 ## Commands
 
 ```bash
-# Setup
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-
-# Tests
-pytest tests/ -v
-
-# Microsim (requires rac-us and cosilico-data-sources)
-python -m rac.microsim --year 2024
+uv sync
+uv run pytest tests/ -v
+uv run python examples/run_reform.py examples/uk_tax_benefit.rac examples/reform.rac
 ```
-
-## Related Repos
-
-- **rac-us** - US statute encodings
-- **autorac** - AI-assisted encoding harness
-- **rac-validators** - External calculator validation
-- **cosilico-data-sources** - CPS microdata, parameters
-- **cosilico-compile** - Multi-target compiler
