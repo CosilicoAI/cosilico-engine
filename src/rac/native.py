@@ -336,6 +336,8 @@ def _generate_main(
         }}''')
 
     return f'''
+#![allow(unused_parens)]
+
 use rayon::prelude::*;
 use std::env;
 use std::fs::File;
