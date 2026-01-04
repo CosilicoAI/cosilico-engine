@@ -14,6 +14,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: true
+          rustflags: ""
 
       - uses: astral-sh/setup-uv@v4
 
