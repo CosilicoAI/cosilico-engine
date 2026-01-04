@@ -8,6 +8,13 @@ from . import ast
 from .compiler import IR
 from .schema import Data
 
+# Try to import Rust backend
+try:
+    from .rac_rust import execute_fast
+    RUST_AVAILABLE = True
+except ImportError:
+    RUST_AVAILABLE = False
+
 
 class ExecutionError(Exception):
     pass
@@ -195,8 +202,92 @@ class Executor:
         return Result(scalars=ctx.computed, entities=entities)
 
 
-def run(ir: IR, data: Data | dict[str, list[dict]]) -> Result:
-    """Execute IR against data."""
+def _expr_to_dict(expr: ast.Expr) -> dict:
+    """Convert AST expression to dict for Rust backend."""
+    match expr:
+        case ast.Literal(value=v):
+            return {"type": "literal", "value": float(v) if isinstance(v, (int, float)) else 0.0}
+        case ast.Var(path=path):
+            return {"type": "var", "path": path}
+        case ast.BinOp(op=op, left=left, right=right):
+            return {"type": "binop", "op": op, "left": _expr_to_dict(left), "right": _expr_to_dict(right)}
+        case ast.Call(func=func, args=args):
+            return {"type": "call", "func": func, "args": [_expr_to_dict(a) for a in args]}
+        case ast.Cond(condition=cond, then_expr=then_e, else_expr=else_e):
+            return {"type": "cond", "cond": _expr_to_dict(cond), "then": _expr_to_dict(then_e), "else": _expr_to_dict(else_e)}
+        case _:
+            return {"type": "literal", "value": 0.0}
+
+
+def run(ir: IR, data: Data | dict[str, list[dict]], use_rust: bool = True) -> Result:
+    """Execute IR against data.
+
+    Args:
+        ir: Compiled IR
+        data: Input data (dict of entity -> list of rows)
+        use_rust: Use Rust backend if available (default True)
+    """
     if isinstance(data, dict):
         data = Data(tables=data)
+
+    # Use Rust backend for entity variables if available
+    if use_rust and RUST_AVAILABLE and data.tables:
+        return _run_rust(ir, data)
+
     return Executor(ir).execute(data)
+
+
+def _run_rust(ir: IR, data: Data) -> Result:
+    """Execute using Rust backend."""
+    # Convert IR to format for Rust
+    variables = []
+    for path in ir.order:
+        var = ir.variables[path]
+        variables.append({
+            "path": path,
+            "entity": var.entity,
+            "expr": _expr_to_dict(var.expr),
+        })
+
+    # Execute Python for scalars first
+    executor = Executor(ir)
+    ctx = Context(data=data)
+    for path in ir.order:
+        var = ir.variables[path]
+        if var.entity is None:
+            ctx.computed[path] = evaluate(var.expr, ctx)
+
+    # Use Rust for each entity
+    entities: dict[str, dict[str, list[Any]]] = {}
+
+    for entity_name, rows in data.tables.items():
+        if not rows:
+            continue
+
+        # Get entity variables
+        entity_vars = [v for v in variables if v["entity"] == entity_name]
+        if not entity_vars:
+            continue
+
+        # Add scalar values to each row
+        rows_with_scalars = []
+        for row in rows:
+            augmented = dict(row)
+            augmented.update(ctx.computed)
+            rows_with_scalars.append(augmented)
+
+        # Execute in Rust
+        results = execute_fast(
+            variables,
+            ir.order,
+            entity_name,
+            rows_with_scalars,
+        )
+
+        # Extract entity variable results
+        entities[entity_name] = {}
+        for var in entity_vars:
+            path = var["path"]
+            entities[entity_name][path] = [r.get(path, 0.0) for r in results]
+
+    return Result(scalars=ctx.computed, entities=entities)

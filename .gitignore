@@ -11,3 +11,6 @@ build/
 .ruff_cache/
 
 paper/_build/
+target/
+*.so
+*.dylib
