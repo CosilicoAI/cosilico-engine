@@ -1,22 +1,21 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "cosilico"
+name = "rac"
 version = "0.1.0"
-description = "AI rules engine for tax and benefit law"
+description = "High-performance DSL for tax and benefit law"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = {text = "MIT"}
 authors = [
     { name = "Cosilico", email = "hello@cosilico.ai" }
 ]
-keywords = ["tax", "benefits", "policy", "ai", "rules-engine"]
+keywords = ["tax", "benefits", "policy", "microsimulation", "rules-engine"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -24,41 +23,23 @@ classifiers = [
 ]
 
 dependencies = [
-    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
-llm = [
-    "anthropic>=0.25.0",
-]
-oracle = [
-    "policyengine-us>=1.40.0",
-]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
     "ruff>=0.1.0",
-    "mypy>=1.0.0",
 ]
-all = [
-    "cosilico[llm,oracle,dev]",
-]
-
-[project.scripts]
-cosilico-demo = "cosilico.demo:main"
 
 [project.urls]
 Homepage = "https://cosilico.ai"
-Documentation = "https://docs.rac.ai"
 Repository = "https://github.com/CosilicoAI/rac"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/rac"]
-
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 100
@@ -67,12 +48,6 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
