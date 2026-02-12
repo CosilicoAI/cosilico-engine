@@ -2561,9 +2561,10 @@ formula: |
     def test_validate_main_module_guard(self):
         """The if __name__ == '__main__' guard (L594) — test via subprocess."""
         import subprocess
+        import sys
 
         result = subprocess.run(
-            ["/opt/homebrew/bin/python3.13", "-m", "rac.validate"],
+            [sys.executable, "-m", "rac.validate"],
             capture_output=True,
             text=True,
         )
